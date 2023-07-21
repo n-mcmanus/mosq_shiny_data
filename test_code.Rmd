@@ -1,0 +1,27 @@
+---
+title: "test"
+author: "Nick McManus"
+date: "2023-07-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(terra)
+library(here)
+library(leaflet)
+library(raster)
+```
+
+
+```{r}
+trans_r <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
+pal <- colorNumeric(c("#0C2C84", "#41B6C4", "#FFFFCC"), values(trans_r),
+                    na.color = "transparent")
+
+
+leaflet() %>% 
+  addRasterImage(trans_r, colors = pal, project = FALSE)
+
+```
+

@@ -11,7 +11,37 @@ library(terra)
 library(here)
 library(leaflet)
 library(raster)
+library(sf)
 ```
+
+
+Read in and crop zipcode vector to only those intersecting with Kern County
+
+```{r}
+trans_r <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
+zips <- st_read(here('data/zipcodes/CA_Zips.shp'))
+counties <- st_read(here('data/counties_ca/cnty19_1.shp'))
+
+## Different crs, so make them match first
+zips_trans <- st_transform(zips, crs = st_crs(counties)) %>% 
+  vect()
+
+## isolate Kern county
+kern <- counties %>% 
+  dplyr::filter(COUNTY_NAM == "Kern") %>% 
+
+kern_zips <- terra::intersect(zips_trans, kern)
+
+crs(kern_zips) <- crs(trans_r)
+
+writeVector(kern_zips, here('data/zipcodes/kern_zips.shp'), overwrite = T)
+
+# test <- st_read(here('data/zipcodes/kern_zips.shp')) %>% 
+#   dplyr::select(GEOID10)
+
+
+```
+
 
 
 ```{r}

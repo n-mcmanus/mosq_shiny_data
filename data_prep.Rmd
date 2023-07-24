@@ -1,0 +1,135 @@
+---
+title: "test"
+author: "Nick McManus"
+date: "2023-07-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(terra)
+library(tidyverse)
+library(lubridate)
+library(here)
+library(leaflet)
+library(raster)
+library(sf)
+```
+
+
+We want to find and save the zip codes that intersect with Kern county. We'll read in county and zip code vectors for the whole state, join them, then only select those zipcodes in Kern county. This .shp will then be exported for use in the Shiny app.
+*Note*: originally I attempted this by using the `terra::intersect` tool, but this resulted in cutting off portions of zipcodes outside of Kern county. When trying to do the spatial analysis in the `sf` package, it keeps too many geometries that touch but don't intersect. Can work on this more in the future to determine best method.
+
+```{r}
+## Read in raw data
+zips <- st_read(here('data/zipcodes/CA_Zips.shp'))
+counties <- st_read(here('data/counties_ca/cnty19_1.shp')) 
+
+## make sure both layers have same crs
+zips_trans <- zips %>% 
+  st_transform(zips, crs = st_crs(counties)) %>%
+  ## only need to keep zipcode number
+  dplyr::select(GEOID10) 
+
+## Only keep name of counties
+counties <- dplyr::select(counties, COUNTY_NAM)
+
+# kern <- dplyr::filter(counties, COUNTY_NAM == "Kern") 
+
+
+## Keep zipcodes that touch Kern county
+kern_zips <- st_join(zips_trans, counties, join = st_intersects) %>% 
+  dplyr::filter(COUNTY_NAM == "Kern", 
+                ## remove select zips that barely touch Kern
+                !GEOID10 %in% c(93536, 93535, 93201, 
+                                93239, 93204, 93453,
+                                93257, 93260, 93219, 
+                                93261, 93218)) 
+  
+## save
+st_write(kern_zips, here("data/zipcodes/kern_zips.shp"))
+
+```
+
+```{r}
+### Method using combination of sf and terra:
+
+# zips <- st_read(here('data/zipcodes/CA_Zips.shp'))
+# counties <- st_read(here('data/counties_ca/cnty19_1.shp')) 
+# 
+# ## make sure both layers have same crs
+# zips_trans <- zips %>% 
+#   st_transform(zips, crs = st_crs(counties)) %>%
+#   ## only need to keep zipcode number
+#   dplyr::select(GEOID10) %>% 
+#   vect()
+# 
+# ## isolate Kern county
+# kern <- counties %>% 
+#   dplyr::filter(COUNTY_NAM == "Kern") %>% 
+#   vect()
+# 
+# kern_zips <- terra::intersect(kern, zips_trans)
+# 
+# crs(kern_zips) <- crs(trans_r)
+# 
+# writeVector(kern_zips, here('data/zipcodes/kern_zips.shp'), overwrite = T)
+```
+
+
+
+Now we'll determine how much standing water is present within each Kern county zip code. This data will be exported as a .csv and used for the Shiny app.
+*Note:* Some standing water is outside of a zip code...
+
+```{r}
+## Read in standing water data at 30m resolution
+water_jun <- rast(here('data/water/LC09_CU_003011_20230625_20230701_02_DSWE_Binary2_T.tif')) 
+water_jun <- subst(water_jun, NA, 0)
+
+## easier to transform vector than high-res raster
+kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
+  project(y = crs(water_jun))
+
+## find the number of cells with water in each zipcode
+water_zonal <- terra::zonal(water_jun, kern_zips, fun = 'sum', na.rm = T)
+
+## add zipcode info to each zone
+water_zips <- water_zonal %>% 
+  mutate(zipcode = kern_zips$GEOID10) %>% 
+  ## clean up names
+  rename(water_ha = LC09_CU_003011_20230625_20230701_02_DSWE_Binary2_T) %>% 
+  ## convert values from "units" ha
+  ## w/30m resolution, each unit is 900 m^2
+  ## 10,000 m^2 are in one hectare
+  mutate(water_ha = water_ha * 900 / 10000) %>% 
+  ## finally add date information
+  mutate(date = ymd("2023-06-25"))
+
+## export as .csv
+write_csv(water_zips, here('data/water/water_ha_zipcode.csv'))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+Testing leaflet outside of Shiny app
+
+```{r}
+trans_r <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
+pal <- colorNumeric(c("#0C2C84", "#41B6C4", "#FFFFCC"), values(trans_r),
+                    na.color = "transparent")
+
+
+leaflet() %>% 
+  addRasterImage(trans_r, colors = pal, project = FALSE)
+
+```
+

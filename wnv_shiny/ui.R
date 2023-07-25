@@ -10,40 +10,51 @@
 library(shiny)
 library(leaflet)
 
-# Define UI for application that draws a histogram
 
+## Top bar with title and tabs
 navbarPage("WNV transmission", id = "nav",
            
+           
+    ## TAB 1: WNV Interactive map       
     tabPanel("Interactive map",
         div(class = "outer",
-                        
-             tags$head(
-               includeCSS("styles.css")
-               ),
             
-             leafletOutput("map", width = "100%", height = "100%") 
+            ## Use custom CSS
+            tags$head(
+              includeCSS("styles.css")
+              ),
+            
+            
+            ## Interactive map
+            leafletOutput("map", width = "100%", height = "100%"),
+            
+            
+            ## Draggable panel on right
+            absolutePanel(id = "controls", class = "panel panel-default",
+                          fixed = TRUE, draggable = TRUE,
+                          top = 60, left = "auto", right = 20, bottom = "auto",
+                          width = 350, height = "auto",
+              
+              h2("Title here"),
+              
+              ## User inputs zipcode
+              textInput(inputId = "zip_box", label = "Zip code",
+                        placeholder = "Enter your zip code..."
                         ),
-           )
-)
+              br(),
+              
+              ## Plot timeseries of standing water
+              plotOutput("water_plot", height = 200)
+              
+        ) ## End panel
+            
+            
+            ),
+        
+        
+           ) ## END TAB 1
+) ## END UI
   
   
 
-    # Application title
-   # titlePanel("Old Faithful Geyser Data"),
-
-    # Sidebar with a slider input for number of bins
-    # sidebarLayout(
-    #     sidebarPanel(
-    #         sliderInput("bins",
-    #                     "Number of bins:",
-    #                     min = 1,
-    #                     max = 50,
-    #                     value = 30)
-    #     ),
-    # 
-    #     # Show a plot of the generated distribution
-    #     mainPanel(
-    #         plotOutput("distPlot")
-    #     )
-    # )
-
+   

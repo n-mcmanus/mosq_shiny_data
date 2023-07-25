@@ -83,7 +83,7 @@ Now we'll determine how much standing water is present within each Kern county z
 
 ```{r}
 ## Read in standing water data at 30m resolution
-water_jun <- rast(here('data/water/LC09_CU_003011_20230625_20230701_02_DSWE_Binary2_T.tif')) 
+water_jun <- rast(here('data/water/time_series/LC09_CU_003011_20230625_20230701_02_DSWE_Binary2_T.tif')) 
 water_jun <- subst(water_jun, NA, 0)
 
 ## easier to transform vector than high-res raster
@@ -110,8 +110,31 @@ write_csv(water_zips, here('data/water/water_ha_zipcode.csv'))
 ```
 
 
+Testing out water plot for shiny:
+```{r}
+data <- read_csv(here('data/water/water_test_data.csv'))
 
+user_input <- "93280"
 
+data_filtered <- data %>% 
+  filter(zipcode == user_input) %>% 
+  mutate(date = mdy(date))
+
+ggplot(data_filtered, aes(x = date, y = water_ha)) +
+  geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
+  geom_line(size = 0.6, color = "dodgerblue4") +
+  labs(y = "Surface water size (ha)",
+       x = element_blank()) +
+    ## customize axis with cont 'date' class data
+  scale_x_date(limits = as.Date(c('2023-05-07', '2023-06-25')),
+               date_breaks = "1 week",
+               date_labels = "%b %d") +
+  theme_classic() +
+  theme(
+    # axis.title.x = element_text(face = "bold", vjust = -1),
+    axis.title.y = element_text(face = 'bold', vjust = 3)
+  )
+```
 
 
 
@@ -124,12 +147,26 @@ Testing leaflet outside of Shiny app
 
 ```{r}
 trans_r <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
+water <- raster(here('data/water/time_series/LC09_CU_003011_20230625_20230701_02_DSWE_Binary2_T.tif'))
 pal <- colorNumeric(c("#0C2C84", "#41B6C4", "#FFFFCC"), values(trans_r),
                     na.color = "transparent")
 
+zips <- read_sf(here("data/zipcodes/kern_zips.shp"))
+zips_trans<- st_transform(zips, crs = "+proj=longlat +datum=WGS84")
 
 leaflet() %>% 
-  addRasterImage(trans_r, colors = pal, project = FALSE)
+  addTiles(group = "OSM (default)") %>% 
+  addProviderTiles(providers$Stamen.TonerLite, group = "Toner Lite") %>%
+  addRasterImage(trans_r, colors = pal, project = FALSE, group = "WNV Risk") %>%
+  addPolygons(data = zips_trans, color = "#343434", 
+              weight = 2, fillOpacity = 0,
+              label = paste0("Zip code: ", zips_trans$GEOID10),
+              group = "Zip codes") %>% 
+   addLayersControl(
+    baseGroups = c("OSM (default)", "Toner Lite"),
+    overlayGroups = c("WNV Risk", "Zip codes"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
 
 ```
 

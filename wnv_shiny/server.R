@@ -13,12 +13,12 @@ wnv_risk <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
 water <- raster(here('data/water/water_reproj.tif'))
 
 ## Vectors
-zips <- read_sf(here("data/zipcodes/kern_zips.shp"))
-zips_trans<- st_transform(zips, crs = "+proj=longlat +datum=WGS84")
+zips_sf <- read_sf(here("data/zipcodes/kern_zips.shp"))
 
 ## Data frames
-water_test_data <- read_csv(here('data/water/water_test_data.csv')) %>% 
+water_test_df <- read_csv(here('data/water/water_test_data.csv')) %>% 
   mutate(date = mdy(date))
+trans_zip_df <- read_csv(here('data/transmission_zipcodes.csv'))
 
 ## Raster color palette
 pal <- colorNumeric(palette = 'viridis', domain = values(wnv_risk),
@@ -52,20 +52,49 @@ function(input, output, session) {
     }
   })
   
+  
   ## Filter water data based on zip input
   water_zip <- reactive({
-    data_filtered <- water_test_data %>% 
+    water_filtered <- water_test_df %>% 
       filter(zipcode == zipcode_d()) 
     
-    return(data_filtered)
-  })           
+    return(water_filtered)
+  })    
+  
+  
+  ## Return mean transmission risk based on zip input
+  trans_zip <- reactive({
+    trans_filtered <- trans_zip_df %>% 
+      filter(zipcode == zipcode_d())
+    
+    ## return only transmission value
+    trans_mean <- round(trans_filtered$trans_risk,3)
+    return(trans_mean)
+  })
+  
 
   
-  ### Panel plots --------------------------------------------
+  
+  ### Panel elements -----------------------------------------
+  
+  ## Reactive transmission text
+  output$zip_risk <- renderText({
+    ## If no zip input, don't show text
+    if(nchar(zipcode_d()) == 0) {
+      return(NULL)
+      ## If there is no trans data for zipcode
+    } else if (is.na(trans_zip())) {
+      print("Transmission data unavailable for this zip code.")
+    } else {
+      ## Text for valid zips
+      paste('The average transmission risk for zip code', "<i>",zipcode_d(),"</i>","is:", "<b>",trans_zip(),"</b>")
+    }
+  })
+  
   
   ## Standing water time series
   output$water_plot <- renderPlot({
-   if (is.na(zipcode()))
+   if (nchar(zipcode_d()) == 0)
      return(NULL)
      
     
@@ -98,12 +127,12 @@ function(input, output, session) {
       ## Add rasters
       addRasterImage(wnv_risk, colors = pal, 
                      project = FALSE, group = "WNV Risk") %>%
-      # addRasterImage(water_reproj, colors = 'dodgerblue4', 
-      #                project = FALSE, group = "Standing Water") %>% 
+      # addRasterImage(water_reproj, colors = 'dodgerblue4',
+      #                project = FALSE, group = "Standing Water") %>%
       ## Add polygons
-      addPolygons(data = zips_trans, color = "#343434", 
+      addPolygons(data = zips_sf, color = "#343434", 
                   weight = 2, fillOpacity = 0.1,
-                  label = paste0("Zip code: ", zips_trans$GEOID10),
+                  label = paste0("Zip code: ", zips_sf$GEOID10),
                   highlight = highlightOptions(weight = 5,
                                                color = "white",
                                                bringToFront = TRUE),

@@ -39,8 +39,12 @@ navbarPage("WNV transmission", id = "nav",
               
               ## User inputs zipcode
               textInput(inputId = "zip_box", label = "Zip code",
+                        value = NA,
                         placeholder = "Enter your zip code..."
                         ),
+              br(),
+              
+              htmlOutput("zip_risk"),
               br(),
               
               ## Plot timeseries of standing water

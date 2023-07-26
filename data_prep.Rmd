@@ -114,11 +114,12 @@ Testing out water plot for shiny:
 ```{r}
 data <- read_csv(here('data/water/water_test_data.csv'))
 
-user_input <- "93280"
+user_input <- "93222"
 
 data_filtered <- data %>% 
   filter(zipcode == user_input) %>% 
   mutate(date = mdy(date))
+
 
 ggplot(data_filtered, aes(x = date, y = water_ha)) +
   geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
@@ -141,32 +142,57 @@ ggplot(data_filtered, aes(x = date, y = water_ha)) +
 
 
 
+```{r}
+water <- raster(here('data/water/time_series/LC09_CU_003011_20230625_20230701_02_DSWE_Binary2_T.tif'))
+water_reproj <- projectRaster(water, crs = crs(trans_r), method = 'ngb')
+names(water_reproj) <- "water_reproj"
+water_reproj[water_reproj == 0] <- NA
+
+writeRaster(water_reproj, here('data/water/water_reproj.tif'))
+```
 
 
 Testing leaflet outside of Shiny app
 
 ```{r}
 trans_r <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
-water <- raster(here('data/water/time_series/LC09_CU_003011_20230625_20230701_02_DSWE_Binary2_T.tif'))
-pal <- colorNumeric(c("#0C2C84", "#41B6C4", "#FFFFCC"), values(trans_r),
+
+pal <- colorNumeric(palette = 'viridis', domain = values(trans_r),
+                    reverse = TRUE,
                     na.color = "transparent")
+
 
 zips <- read_sf(here("data/zipcodes/kern_zips.shp"))
 zips_trans<- st_transform(zips, crs = "+proj=longlat +datum=WGS84")
 
 leaflet() %>% 
-  addTiles(group = "OSM (default)") %>% 
+  ## Add background maps
+  addTiles(group = "OpenStreetMaps") %>% 
   addProviderTiles(providers$Stamen.TonerLite, group = "Toner Lite") %>%
+  ## Add rasters
   addRasterImage(trans_r, colors = pal, project = FALSE, group = "WNV Risk") %>%
+  addRasterImage(water_reproj, colors = 'dodgerblue4', project = FALSE, group = "Water") %>% 
+  ## Add polygons
   addPolygons(data = zips_trans, color = "#343434", 
-              weight = 2, fillOpacity = 0,
+              weight = 2, fillOpacity = 0.2,
               label = paste0("Zip code: ", zips_trans$GEOID10),
-              group = "Zip codes") %>% 
-   addLayersControl(
-    baseGroups = c("OSM (default)", "Toner Lite"),
-    overlayGroups = c("WNV Risk", "Zip codes"),
-    options = layersControlOptions(collapsed = FALSE)
-  )
+              group = "Zip codes",
+              highlightOptions = highlightOptions(weight = 5,
+                                               color = "white",
+                                               bringToFront = TRUE)) %>% 
+  ## Add groups to map
+  addLayersControl(
+    baseGroups = c("OpenStreetMaps", "Toner Lite"),
+    overlayGroups = c("WNV Risk", "Zip codes", "Water"),
+    options = layersControlOptions(collapsed = T),
+    position = "topleft"
+  ) %>% 
+  hideGroup("Zip codes") %>% 
+  ## Add legend to map
+  addLegend(pal = pal, values = values(trans_r),
+            "bottomleft",
+            title = "WNV Transmission Risk")%>% 
+      setView(-119.3, 35.55, zoom = 11)
 
 ```
 

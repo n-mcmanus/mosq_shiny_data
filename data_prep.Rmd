@@ -17,6 +17,11 @@ library(sf)
 ```
 
 
+## DATA WRANGLING
+
+In this section, we'll crop and reproject spatial data as well as find zonal statistics and output dataframes useful for the Shiny.
+
+
 We want to find and save the zip codes that intersect with Kern county. We'll read in county and zip code vectors for the whole state, join them, then only select those zipcodes in Kern county. This .shp will then be exported for use in the Shiny app.
 *Note*: originally I attempted this by using the `terra::intersect` tool, but this resulted in cutting off portions of zipcodes outside of Kern county. When trying to do the spatial analysis in the `sf` package, it keeps too many geometries that touch but don't intersect. Can work on this more in the future to determine best method.
 
@@ -46,8 +51,11 @@ kern_zips <- st_join(zips_trans, counties, join = st_intersects) %>%
                                 93257, 93260, 93219, 
                                 93261, 93218)) 
   
+## Reproject zips to leaflet-required crs
+kern_zips_trans <- st_transform(kern_zips, crs = "+proj=longlat +datum=WGS84")
+
 ## save
-st_write(kern_zips, here("data/zipcodes/kern_zips.shp"))
+st_write(kern_zips_trans, here("data/zipcodes/kern_zips.shp"))
 
 ```
 
@@ -110,6 +118,107 @@ write_csv(water_zips, here('data/water/water_ha_zipcode.csv'))
 ```
 
 
+Here we'll find an average WNV transmission risk for each zipcode
+```{r}
+wnv_risk <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
+
+## easier to transform vector than high-res raster
+kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
+  project(y = crs(wnv_risk))
+
+## find the mean value per zip
+risk_zonal <- terra::zonal(wnv_risk, kern_zips, fun = 'mean', na.rm = T)
+
+risk_zonal_zips <- risk_zonal %>% 
+  mutate(zipcode = kern_zips$GEOID10) %>% 
+  rename(trans_risk = Kern_transmission_raster_wgs84)
+
+write_csv(risk_zonal_zips, here('data/transmission_zipcodes.csv'))
+
+test <- risk_zonal_zips %>% 
+  filter(zipcode == 93307)
+
+if (is.na(test$trans_risk)) {
+  print("Not available")
+} else {print(test$trans_risk)}
+```
+
+
+
+Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plot showing how number of WNV found in traps across a zipcode changes by month/year.
+```{r}
+## Read in raw trap data
+traps <- st_read(here('data/wnv_cases/WNV_full_4_23_CA.shp'))
+
+zips_kern <- st_read(here("data/zipcodes/kern_zips.shp"))
+
+## make same crs and into terra vectors
+zips_kern <- st_transform(zips_kern, crs = st_crs(traps)) %>% 
+  vect()
+traps <- vect(traps)
+
+
+## Find intersection using terra (much faster) then
+## convert back to sf to save as csv
+traps_kern <- terra::intersect(zips_kern, traps)
+traps_kern_sf <- st_as_sf(traps_kern)
+## Save intermediate
+# st_write(traps_kern_sf, here('data/wnv_cases/wnv_kern.shp'))
+# write_csv(traps_kern_sf, here('data/wnv_cases/wnv_kern.csv'))
+
+
+## Now filter data and create test plots
+cases_kern <- read_csv(here('data/wnv_cases/wnv_kern.csv')) %>% 
+  janitor::clean_names()
+
+cases_zip_yr <- cases_kern %>% 
+  filter(geoid10 == 93203) %>% 
+  group_by(year) %>% 
+  summarize(cases = sum(count))
+
+
+ggplot(data = cases_zip_yr, aes(x = year, y = cases))+
+  geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+  geom_line(linewidth = 1, color = "sienna4") +
+  labs(y = "Annual cases",
+       x = element_blank()) +
+  theme_classic() +
+  theme(
+    # axis.title.x = element_text(face = "bold", vjust = -1),
+    axis.title.y = element_text(face = 'bold', vjust = 3)
+  )
+
+cases_zip_yr_mo <- cases_kern_filter %>% 
+  group_by(geoid10, year, month) %>% 
+  summarize(cases = sum(count)) %>% 
+  ## user input ex
+  filter(geoid10 == 93203) %>% 
+  filter(month == "Aug")
+
+ggplot(data = cases_zip_yr_mo, aes(x = year, y = cases))+
+  geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+  geom_line(linewidth = 1, color = "sienna4") +
+  labs(y = "Cases by month",
+       x = element_blank()) +
+  theme_classic() +
+  theme(
+    # axis.title.x = element_text(face = "bold", vjust = -1),
+    axis.title.y = element_text(face = 'bold', vjust = 3)
+  )
+```
+
+
+
+
+
+
+
+
+
+## TEST PLOTS
+
+
+
 Testing out water plot for shiny:
 ```{r}
 data <- read_csv(here('data/water/water_test_data.csv'))
@@ -155,27 +264,26 @@ writeRaster(water_reproj, here('data/water/water_reproj.tif'))
 Testing leaflet outside of Shiny app
 
 ```{r}
-trans_r <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
+wnv_risk <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
 
-pal <- colorNumeric(palette = 'viridis', domain = values(trans_r),
+pal <- colorNumeric(palette = 'viridis', domain = values(wnv_risk),
                     reverse = TRUE,
                     na.color = "transparent")
 
 
 zips <- read_sf(here("data/zipcodes/kern_zips.shp"))
-zips_trans<- st_transform(zips, crs = "+proj=longlat +datum=WGS84")
 
 leaflet() %>% 
   ## Add background maps
   addTiles(group = "OpenStreetMaps") %>% 
   addProviderTiles(providers$Stamen.TonerLite, group = "Toner Lite") %>%
   ## Add rasters
-  addRasterImage(trans_r, colors = pal, project = FALSE, group = "WNV Risk") %>%
-  addRasterImage(water_reproj, colors = 'dodgerblue4', project = FALSE, group = "Water") %>% 
+  addRasterImage(wnv_risk, colors = pal, project = FALSE, group = "WNV Risk") %>%
+  # addRasterImage(water_reproj, colors = 'dodgerblue4', project = FALSE, group = "Water") %>% 
   ## Add polygons
-  addPolygons(data = zips_trans, color = "#343434", 
+  addPolygons(data = zips, color = "#343434", 
               weight = 2, fillOpacity = 0.2,
-              label = paste0("Zip code: ", zips_trans$GEOID10),
+              label = paste0("Zip code: ", zips$GEOID10),
               group = "Zip codes",
               highlightOptions = highlightOptions(weight = 5,
                                                color = "white",
@@ -189,7 +297,7 @@ leaflet() %>%
   ) %>% 
   hideGroup("Zip codes") %>% 
   ## Add legend to map
-  addLegend(pal = pal, values = values(trans_r),
+  addLegend(pal = pal, values = values(wnv_risk),
             "bottomleft",
             title = "WNV Transmission Risk")%>% 
       setView(-119.3, 35.55, zoom = 11)

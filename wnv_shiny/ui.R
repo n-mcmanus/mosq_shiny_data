@@ -42,13 +42,21 @@ navbarPage("WNV transmission", id = "nav",
                         value = NA,
                         placeholder = "Enter your zip code..."
                         ),
-              br(),
               
+              ## Transmission risk text
+              htmlOutput("trans_header"),
               htmlOutput("zip_risk"),
               br(),
               
-              ## Plot timeseries of standing water
-              plotOutput("water_plot", height = 200)
+              ## Standing water plot
+              htmlOutput("water_header"),
+              plotOutput("water_plot", height = 180),
+              br(),
+              
+              ## Trap plots
+              htmlOutput("trap_header"),
+              plotOutput("trap_plot_yr", height = 180)
+              
               
         ) ## End panel
             

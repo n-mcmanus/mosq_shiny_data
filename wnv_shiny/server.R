@@ -19,6 +19,7 @@ zips_sf <- read_sf(here("data/zipcodes/kern_zips.shp"))
 water_test_df <- read_csv(here('data/water/water_test_data.csv')) %>% 
   mutate(date = mdy(date))
 trans_zip_df <- read_csv(here('data/transmission_zipcodes.csv'))
+cases_kern_df <- read_csv(here('data/wnv_cases/wnv_kern.csv'))
 
 ## Raster color palette
 pal <- colorNumeric(palette = 'viridis', domain = values(wnv_risk),
@@ -77,10 +78,20 @@ function(input, output, session) {
   
   ### Panel elements -----------------------------------------
   
+  ## Transmission Risk header
+  output$trans_header <- renderText({
+    ## If invalid zip input, don't show text
+    if (nchar(zipcode_d()) != 5) {
+      return(NULL)
+    } else {
+      paste("<h3>", "Transmission Risk:", "</h3>")
+    }
+  })
+  
   ## Reactive transmission text
   output$zip_risk <- renderText({
-    ## If no zip input, don't show text
-    if(nchar(zipcode_d()) == 0) {
+    ## If invalid zip input, don't show text
+    if(nchar(zipcode_d()) != 5) {
       return(NULL)
       ## If there is no trans data for zipcode
     } else if (is.na(trans_zip())) {
@@ -92,12 +103,21 @@ function(input, output, session) {
   })
   
   
+  
+  ## Standing water header
+  output$water_header <- renderText({
+    if(nchar(zipcode_d()) != 5) {
+      return(NULL)
+    } else {
+      paste("<h3>", "Standing water:", "</h3>")
+    }
+  })
+  
   ## Standing water time series
   output$water_plot <- renderPlot({
-   if (nchar(zipcode_d()) == 0)
+   if (nchar(zipcode_d()) != 5)
      return(NULL)
      
-    
     ggplot(data = water_zip(), aes(x = date, y = water_ha)) +
       geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
       geom_line(linewidth = 0.6, color = "dodgerblue4") +
@@ -117,17 +137,61 @@ function(input, output, session) {
   })
   
   
+  ## Trap header
+  output$trap_header <- renderText({
+    ## If no zip input, don't show text
+    if(nchar(zipcode_d()) != 5) {
+      return(NULL)
+    } else {
+      paste("<h3>", "Trap Data:", "</h3>")
+    }
+  })
+  
+  ## Filter trap data by user input
+  trap_data_yr <- reactive ({
+
+      filtered <- cases_kern_df %>% 
+        filter(GEOID10 == zipcode_d()) %>% 
+        group_by(Year) %>% 
+        summarize(cases = sum(Count))
+      
+    return(filtered)
+  })
+  
+  ## Standing water time series
+  output$trap_plot_yr <- renderPlot({
+    if (nchar(zipcode_d()) != 5)
+      return(NULL)
+    
+    ggplot(data = trap_data_yr(), aes(x = Year, y = cases)) +
+      geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+      geom_line(linewidth = 0.6, color = "sienna4") +
+      labs(y = "Trapped annual cases",
+           x = element_blank()) +
+      theme_classic() +
+      theme(
+        # axis.title.x = element_text(face = "bold", vjust = -1),
+        axis.title.y = element_text(face = 'bold', vjust = 3, size = 15),
+        axis.text = element_text(size = 13)
+      )
+    
+  })
+  
+  
+
+  
+  
   
   ### Leaflet map ---------------------------------------------
   output$map <- renderLeaflet({
     leaflet() %>% 
       ## Add background maps
       addTiles(group = "OpenStreetMaps") %>% 
-      addProviderTiles(providers$Stamen.TonerLite, group = "Toner Lite") %>%
+      addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
       ## Add rasters
       addRasterImage(wnv_risk, colors = pal, 
                      project = FALSE, group = "WNV Risk") %>%
-      # addRasterImage(water_reproj, colors = 'dodgerblue4',
+      # addRasterImage(water, colors = 'dodgerblue4',
       #                project = FALSE, group = "Standing Water") %>%
       ## Add polygons
       addPolygons(data = zips_sf, color = "#343434", 
@@ -139,7 +203,7 @@ function(input, output, session) {
                   group = "Zip codes") %>% 
       ## Add groups to map
       addLayersControl(
-        baseGroups = c("OpenStreetMaps", "Toner Lite"),
+        baseGroups = c("OpenStreetMaps", "World Imagery"),
         overlayGroups = c("WNV Risk", "Zip codes", "Standing Water"),
         options = layersControlOptions(collapsed = TRUE),
         position = "topleft") %>% 

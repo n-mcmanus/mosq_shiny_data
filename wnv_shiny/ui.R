@@ -1,18 +1,11 @@
-#
-# This is the user-interface definition of a Shiny web application. You can
-# run the application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
+
 
 library(shiny)
 library(leaflet)
 
 
 ## Top bar with title and tabs
-navbarPage("WNV transmission", id = "nav",
+navbarPage("WNV in Kern County", id = "nav",
            
            
     ## TAB 1: WNV Interactive map       
@@ -29,16 +22,16 @@ navbarPage("WNV transmission", id = "nav",
             leafletOutput("map", width = "100%", height = "100%"),
             
             
-            ## Draggable panel on right
+            ## Dragable panel on right
             absolutePanel(id = "controls", class = "panel panel-default",
                           fixed = TRUE, draggable = TRUE,
                           top = 60, left = "auto", right = 20, bottom = "auto",
                           width = 350, height = "auto",
               
-              h2("Title here"),
+              # h2("Title here"),
               
               ## User inputs zipcode
-              textInput(inputId = "zip_box", label = "Zip code",
+              textInput(inputId = "zip_box", label = h3("Zip code:"),
                         value = NA,
                         placeholder = "Enter your zip code..."
                         ),
@@ -55,7 +48,11 @@ navbarPage("WNV transmission", id = "nav",
               
               ## Trap plots
               htmlOutput("trap_header"),
-              plotOutput("trap_plot_yr", height = 180)
+              fluidRow(   ## put both input boxes in-line
+                column(width = 6, uiOutput("trap_time")),
+                column(width = 6, uiOutput("trap_month"))
+              ),
+              plotOutput("trap_plot", height = 180)
               
               
         ) ## End panel
@@ -64,7 +61,27 @@ navbarPage("WNV transmission", id = "nav",
             ),
         
         
-           ) ## END TAB 1
+           ), ## END TAB 1
+    
+    
+    
+    ## TAB 2: WNV TRAP CASES
+    tabPanel("Trap cases",
+             p("This is where we'll have more detailed graphs and exploration of standardized trap data.")
+             
+             ), ## END TAB 2
+    
+    
+    
+    
+    
+    ## TAB 3: STANDING WATER
+    tabPanel("Standing water",
+             p("This is where we'll explore changes of standing water over time with graphs and/or animated GIFs.")
+             
+             ) ## END TAB 3
+    
+    
 ) ## END UI
   
   

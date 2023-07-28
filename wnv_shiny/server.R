@@ -37,7 +37,7 @@ function(input, output, session) {
   
   ## React to user input and slightly delay response
   zipcode <- reactive(input$zip_box)
-  zipcode_d <- debounce(zipcode, millis = 2000)
+  zipcode_d <- debounce(zipcode, millis = 1500)
   
   ## Return error if user submits a number
   ## with length other than 5 or 0 (e.g. no entry)
@@ -73,7 +73,27 @@ function(input, output, session) {
     return(trans_mean)
   })
   
-
+  
+  ## Filter trap data by user input
+  trap_data <- reactive ({
+    
+    month_selected <- input$trap_month
+    
+    x <- if(input$trap_time == "annual") {
+      filtered_year <- cases_kern_df %>% 
+        filter(GEOID10 == zipcode_d()) %>% 
+        group_by(Year) %>% 
+        summarize(cases = sum(Count))
+    } else {
+      filtered_month <- cases_kern_df %>% 
+        filter(GEOID10 == zipcode_d(),
+               Month == month_selected) %>% 
+        group_by(Year) %>% 
+        summarize(cases = sum(Count))
+    }
+    return(x)
+  })
+  
   
   
   ### Panel elements -----------------------------------------
@@ -130,7 +150,7 @@ function(input, output, session) {
       theme_classic() +
       theme(
         # axis.title.x = element_text(face = "bold", vjust = -1),
-        axis.title.y = element_text(face = 'bold', vjust = 3, size = 15),
+        axis.title.y = element_text(vjust = 3, size = 14),
         axis.text = element_text(size = 13)
       )
    
@@ -147,37 +167,76 @@ function(input, output, session) {
     }
   })
   
-  ## Filter trap data by user input
-  trap_data_yr <- reactive ({
-
-      filtered <- cases_kern_df %>% 
-        filter(GEOID10 == zipcode_d()) %>% 
-        group_by(Year) %>% 
-        summarize(cases = sum(Count))
-      
-    return(filtered)
-  })
-  
-  ## Standing water time series
-  output$trap_plot_yr <- renderPlot({
-    if (nchar(zipcode_d()) != 5)
+  ## Trap year/month box
+  output$trap_time <- renderUI({
+    if(nchar(zipcode_d()) != 5) {
       return(NULL)
-    
-    ggplot(data = trap_data_yr(), aes(x = Year, y = cases)) +
-      geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-      geom_line(linewidth = 0.6, color = "sienna4") +
-      labs(y = "Trapped annual cases",
-           x = element_blank()) +
-      theme_classic() +
-      theme(
-        # axis.title.x = element_text(face = "bold", vjust = -1),
-        axis.title.y = element_text(face = 'bold', vjust = 3, size = 15),
-        axis.text = element_text(size = 13)
-      )
-    
+    } else {
+      selectInput("trap_time", label = "Select timeframe:",
+                  choices = list("Annual" = "annual",
+                                 "Monthly" = "monthly"),
+                  selected = "annual")
+    } 
+  })
+  
+  ## Trap month box
+  output$trap_month <- renderUI({
+    if(nchar(zipcode_d())!=5) {
+      return(NULL)
+      ## only appear if correct zip input AND 
+      ## first box is monthly
+    } else if (input$trap_time == "annual") {
+      return(NULL)
+    } else {
+      selectInput("trap_month", label = "Select month:",
+                  choices = list("March" = "Mar",
+                                 "April" = "Apr",
+                                 "May" = "May",
+                                 "June" = "Jun",
+                                 "July" = "Jul",
+                                 "August" = "Aug",
+                                 "September" = "Sep",
+                                 "October" = "Oct",
+                                 "November" = "Nov"),
+                  selected = "Aug")
+    }
   })
   
   
+  ## Standing water time series plots
+  output$trap_plot <- renderPlot({
+    if (nchar(zipcode_d()) != 5) {
+      return(NULL)
+    } else if (input$trap_time == "annual") {
+      ggplot(data = trap_data(), aes(x = Year, y = cases)) +
+        geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+        geom_line(linewidth = 0.6, color = "sienna4") +
+        labs(y = "Annual trapped cases",
+             x = "Year") +
+        theme_classic() +
+        theme(
+          # axis.title.x = element_text(face = "bold", vjust = -1),
+          axis.title.y = element_text(vjust = 3, size = 14),
+          axis.title.x = element_text(vjust = -1, size = 14),
+          axis.text = element_text(size = 13)
+        ) 
+    } else {
+      ggplot(data = trap_data(), aes(x = Year, y = cases)) +
+        geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+        geom_line(linewidth = 0.6, color = "sienna4") +
+        labs(y = "Monthly trapped cases",
+             x = "Year") +
+        theme_classic() +
+        theme(
+          # axis.title.x = element_text(face = "bold", vjust = -1),
+          axis.title.y = element_text(vjust = 3, size = 14),
+          axis.title.x = element_text(vjust = -1, size = 14),
+          axis.text = element_text(size = 13)
+        ) 
+    }
+  })
+  
+
 
   
   
@@ -188,20 +247,25 @@ function(input, output, session) {
       ## Add background maps
       addTiles(group = "OpenStreetMaps") %>% 
       addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
+      
       ## Add rasters
       addRasterImage(wnv_risk, colors = pal, 
                      project = FALSE, group = "WNV Risk") %>%
       # addRasterImage(water, colors = 'dodgerblue4',
       #                project = FALSE, group = "Standing Water") %>%
+      
       ## Add polygons
       addPolygons(data = zips_sf, color = "#343434", 
-                  weight = 2, fillOpacity = 0.1,
+                  weight = 3, fillOpacity = 0.1,
                   label = paste0("Zip code: ", zips_sf$GEOID10),
+                  labelOptions = labelOptions(textsize = "11px"),
                   highlight = highlightOptions(weight = 5,
                                                color = "white",
                                                bringToFront = TRUE),
-                  group = "Zip codes") %>% 
-      ## Add groups to map
+                  group = "Zip codes",
+                  layerId = ~GEOID10) %>% 
+      
+      ## Create map groups
       addLayersControl(
         baseGroups = c("OpenStreetMaps", "World Imagery"),
         overlayGroups = c("WNV Risk", "Zip codes", "Standing Water"),
@@ -209,14 +273,31 @@ function(input, output, session) {
         position = "topleft") %>% 
       ## Only raster shows by default
       hideGroup(c("Zip codes", "Standing Water")) %>% 
+      
+      ## Add map inset
+      addMiniMap(
+        tiles = providers$Esri.WorldStreetMap,
+        zoomLevelOffset = -5,
+        position = 'bottomleft',
+        toggleDisplay = TRUE) %>% 
+      
       ## Add legend to map
       addLegend(pal = pal, values = values(wnv_risk),
-                position = "bottomleft",
-                title = "WNV Transmission Risk") %>% 
+                position = "topleft",
+                title = "WNV Transmission </br> Efficiency") %>% 
       setView(-119.3, 35.55, zoom = 10)
   })
   
   
+  ## Click on zip code polygon
+  ## to input value in text box
+  observe({
+    event <- input$map_shape_click
+    
+    updateTextInput(session, 
+                    inputId = "zip_box", 
+                    value = event$id)
+  })
   
 
 

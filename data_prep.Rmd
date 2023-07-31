@@ -22,46 +22,52 @@ library(sf)
 In this section, we'll crop and reproject spatial data as well as find zonal statistics and output dataframes useful for the Shiny.
 
 
-We want to find and save the zip codes that intersect with Kern county. We'll read in county and zip code vectors for the whole state, join them, then only select those zipcodes in Kern county. This .shp will then be exported for use in the Shiny app.
-*Note*: originally I attempted this by using the `terra::intersect` tool, but this resulted in cutting off portions of zipcodes outside of Kern county. When trying to do the spatial analysis in the `sf` package, it keeps too many geometries that touch but don't intersect. Can work on this more in the future to determine best method.
+
+### Zip codes
+
+We want to find and save the zip codes that intersect with Kern county. This .shp will then be exported for use in the Shiny app.
+
+*Note*: For the purposes of this app, the extent of zip codes will be cropped to only portions within Kern county. To keep the entire geometry of zips that are within Kern, see the commented out code chunk below. 
 
 ```{r}
-## Read in raw data
+## Read in raw data using 'sf' package
 zips <- st_read(here('data/zipcodes/CA_Zips.shp'))
-counties <- st_read(here('data/counties_ca/cnty19_1.shp')) 
+counties <- st_read(here('data/counties_ca/cnty19_1.shp'))
 
 ## make sure both layers have same crs
-zips_trans <- zips %>% 
-  st_transform(zips, crs = st_crs(counties)) %>%
-  ## only need to keep zipcode number
-  dplyr::select(GEOID10) 
+zips_reproj <- zips %>% 
+  st_transform(zips, crs = st_crs(counties)) %>% 
+  ## only need to keep zip code number
+  dplyr::select(GEOID10) %>% 
+  ## remove incorrect zip
+  dplyr::filter(!GEOID10 == 93453) %>%
+  ## transform to SpatVect obj in `terra` pkg
+  vect()
 
-## Only keep name of counties
-counties <- dplyr::select(counties, COUNTY_NAM)
+## isolate Kern county
+kern <- counties %>%
+  dplyr::filter(COUNTY_NAM == "Kern") %>%
+  dplyr::select(COUNTY_NAM) %>% 
+  ## make SpatVect obj
+  vect() %>% 
+  ## need buffer to remove very small portions
+  ## of zip codes that remain at edges of county
+  buffer(width = -35)
 
-# kern <- dplyr::filter(counties, COUNTY_NAM == "Kern") 
+## clip zips to kern county
+kern_zips <- terra::intersect(kern, zips_reproj)
 
+## make CRS leaflet friendly
+kern_zips <- terra::project(kern_zips, "+proj=longlat +datum=WGS84")
 
-## Keep zipcodes that touch Kern county
-kern_zips <- st_join(zips_trans, counties, join = st_intersects) %>% 
-  dplyr::filter(COUNTY_NAM == "Kern", 
-                ## remove select zips that barely touch Kern
-                !GEOID10 %in% c(93536, 93535, 93201, 
-                                93239, 93204, 93453,
-                                93257, 93260, 93219, 
-                                93261, 93218)) 
-  
-## Reproject zips to leaflet-required crs
-kern_zips_trans <- st_transform(kern_zips, crs = "+proj=longlat +datum=WGS84")
-
-## save
-st_write(kern_zips_trans, here("data/zipcodes/kern_zips.shp"))
+## Save clipped zips
+writeVector(kern_zips, here('data/zipcodes/kern_zips.shp'), overwrite = T)
 
 ```
 
-```{r}
-### Method using combination of sf and terra:
 
+```{r}
+# ## Read in raw data
 # zips <- st_read(here('data/zipcodes/CA_Zips.shp'))
 # counties <- st_read(here('data/counties_ca/cnty19_1.shp')) 
 # 
@@ -69,25 +75,36 @@ st_write(kern_zips_trans, here("data/zipcodes/kern_zips.shp"))
 # zips_trans <- zips %>% 
 #   st_transform(zips, crs = st_crs(counties)) %>%
 #   ## only need to keep zipcode number
-#   dplyr::select(GEOID10) %>% 
-#   vect()
+#   dplyr::select(GEOID10) 
 # 
-# ## isolate Kern county
-# kern <- counties %>% 
-#   dplyr::filter(COUNTY_NAM == "Kern") %>% 
-#   vect()
+# ## Only keep name of counties
+# counties <- dplyr::select(counties, COUNTY_NAM)
 # 
-# kern_zips <- terra::intersect(kern, zips_trans)
+# # kern <- dplyr::filter(counties, COUNTY_NAM == "Kern") 
 # 
-# crs(kern_zips) <- crs(trans_r)
 # 
-# writeVector(kern_zips, here('data/zipcodes/kern_zips.shp'), overwrite = T)
+# ## Keep zipcodes that touch Kern county
+# kern_zips <- st_join(zips_trans, counties, join = st_intersects) %>% 
+#   dplyr::filter(COUNTY_NAM == "Kern", 
+#                 ## remove select zips that barely touch Kern
+#                 !GEOID10 %in% c(93536, 93535, 93201, 
+#                                 93239, 93204, 93453,
+#                                 93257, 93260, 93219, 
+#                                 93261, 93218)) 
+#   
+# ## Reproject zips to leaflet-required crs
+# kern_zips_trans <- st_transform(kern_zips, crs = "+proj=longlat +datum=WGS84")
+# 
+# ## save
+# st_write(kern_zips_trans, here("data/zipcodes/kern_zips.shp"))
+
 ```
 
 
+### Standing water
 
-Now we'll determine how much standing water is present within each Kern county zip code. This data will be exported as a .csv and used for the Shiny app.
-*Note:* Some standing water is outside of a zip code...
+First we'll reproject and crop Landsat images to Kern county. Next, we'll run zonal stats to determine how much standing water is present in each zip code. This information will be exported as a .csv and used for the Shiny app.
+
 
 ```{r}
 ## Read in standing water data at 30m resolution

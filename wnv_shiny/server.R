@@ -9,20 +9,19 @@ library(sf)
 library(here)
 
 ## Rasters
-wnv_risk <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
+wnv_trans <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
 water <- raster(here('data/water/water_reproj.tif'))
 
 ## Vectors
-zips_sf <- read_sf(here("data/zipcodes/kern_zips.shp"))
+zips_sf <- st_read(here("data/zipcodes/kern_zips.shp"))
 
 ## Data frames
-water_test_df <- read_csv(here('data/water/water_test_data.csv')) %>% 
-  mutate(date = mdy(date))
-trans_zip_df <- read_csv(here('data/transmission_zipcodes.csv'))
+water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
+trans_zip_df <- read_csv(here('data/transmission_efficiency_zipcodes.csv'))
 cases_kern_df <- read_csv(here('data/wnv_cases/wnv_kern.csv'))
 
 ## Raster color palette
-pal <- colorNumeric(palette = 'viridis', domain = values(wnv_risk),
+pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
                     reverse = TRUE,
                     na.color = "transparent")
 
@@ -56,7 +55,7 @@ function(input, output, session) {
   
   ## Filter water data based on zip input
   water_zip <- reactive({
-    water_filtered <- water_test_df %>% 
+    water_filtered <- water_zip_df %>% 
       filter(zipcode == zipcode_d()) 
     
     return(water_filtered)
@@ -69,7 +68,7 @@ function(input, output, session) {
       filter(zipcode == zipcode_d())
     
     ## return only transmission value
-    trans_mean <- round(trans_filtered$trans_risk,3)
+    trans_mean <- round(trans_filtered$trans_eff,3)
     return(trans_mean)
   })
   
@@ -138,19 +137,19 @@ function(input, output, session) {
    if (nchar(zipcode_d()) != 5)
      return(NULL)
      
-    ggplot(data = water_zip(), aes(x = date, y = water_ha)) +
+    ggplot(data = water_zip(), aes(x = date, y = water_acres)) +
       geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
       geom_line(linewidth = 0.6, color = "dodgerblue4") +
-      labs(y = "Surface water (ha)",
+      labs(y = "Surface water (acres)",
            x = element_blank()) +
       ## customize axis with cont 'date' class data
-      scale_x_date(limits = as.Date(c('2023-05-07', '2023-06-25')),
-                   date_breaks = "2 week",
-                   date_labels = "%b %d") +
+      # scale_x_date(limits = as.Date(c('2023-05-07', '2023-06-25')),
+      #              date_breaks = "2 week",
+      #              date_labels = "%b %d") +
       theme_classic() +
       theme(
         # axis.title.x = element_text(face = "bold", vjust = -1),
-        axis.title.y = element_text(vjust = 3, size = 14),
+        axis.title.y = element_text(vjust = 2, size = 14),
         axis.text = element_text(size = 13)
       )
    
@@ -216,7 +215,7 @@ function(input, output, session) {
         theme_classic() +
         theme(
           # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 3, size = 14),
+          axis.title.y = element_text(vjust = 2, size = 14),
           axis.title.x = element_text(vjust = -1, size = 14),
           axis.text = element_text(size = 13)
         ) 
@@ -229,7 +228,7 @@ function(input, output, session) {
         theme_classic() +
         theme(
           # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 3, size = 14),
+          axis.title.y = element_text(vjust = 2, size = 14),
           axis.title.x = element_text(vjust = -1, size = 14),
           axis.text = element_text(size = 13)
         ) 
@@ -249,13 +248,13 @@ function(input, output, session) {
       addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
       
       ## Add rasters
-      addRasterImage(wnv_risk, colors = pal, 
+      addRasterImage(wnv_trans, colors = pal, 
                      project = FALSE, group = "WNV Risk") %>%
       # addRasterImage(water, colors = 'dodgerblue4',
       #                project = FALSE, group = "Standing Water") %>%
       
       ## Add polygons
-      addPolygons(data = zips_sf, color = "#343434", 
+      addPolygons(data = zips_sf, color = "#343434",
                   weight = 3, fillOpacity = 0.1,
                   label = paste0("Zip code: ", zips_sf$GEOID10),
                   labelOptions = labelOptions(textsize = "11px"),
@@ -263,7 +262,7 @@ function(input, output, session) {
                                                color = "white",
                                                bringToFront = TRUE),
                   group = "Zip codes",
-                  layerId = ~GEOID10) %>% 
+                  layerId = ~GEOID10) %>%
       
       ## Create map groups
       addLayersControl(
@@ -282,7 +281,7 @@ function(input, output, session) {
         toggleDisplay = TRUE) %>% 
       
       ## Add legend to map
-      addLegend(pal = pal, values = values(wnv_risk),
+      addLegend(pal = pal, values = values(wnv_trans),
                 position = "topleft",
                 title = "WNV Transmission </br> Efficiency") %>% 
       setView(-119.3, 35.55, zoom = 10)

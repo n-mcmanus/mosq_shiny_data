@@ -131,12 +131,12 @@ water_stats <- function(water_rast, zip_vect, rast_date) {
   
   zonal_stat_df <- zonal_stat %>% 
     ## assign values with corresponding zipcode
-    mutate(zipcode = zip_vect$GEOID10) %>% 
+    mutate(zipcode = zip_vect$GEOID10) %>%
     ## convert values from # of pixels to acres
     ## w/30m resolution, each pixel is 900 m^2
     ## 4046.86 m^2 are in one acre
-    rename(water_acres = "rast") %>% 
-    mutate(water_acres = water_acres * 900 / 4046.86) %>% 
+    rename(water_cells = "rast") %>% 
+    mutate(water_acres = water_cells * 900 / 4046.86) %>% 
     ## finally, add date image was taken
     mutate(date = rast_date)
 }
@@ -165,49 +165,53 @@ write_csv(zip_water_df, here('data/water/water_acre_zipcode.csv'))
 ### Transmission efficiency
 
 Here we'll find an average WNV transmission efficiency for each zipcode.
+*NOTE:* This may be replaced by another transmission raster in the future.
 ```{r}
-wnv_risk <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
+## Read in data
+wnv_trans <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
 
 ## easier to transform vector than high-res raster
 kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
-  project(y = crs(wnv_risk))
+  project(y = crs(wnv_trans))
 
 ## find the mean value per zip
-risk_zonal <- terra::zonal(wnv_risk, kern_zips, fun = 'mean', na.rm = T)
+trans_zonal <- terra::zonal(wnv_trans, kern_zips, fun = 'mean', na.rm = T)
 
-risk_zonal_zips <- risk_zonal %>% 
+trans_zonal_zips <- trans_zonal %>% 
   mutate(zipcode = kern_zips$GEOID10) %>% 
-  rename(trans_risk = Kern_transmission_raster_wgs84)
+  rename(trans_eff = Kern_transmission_raster_wgs84)
 
-write_csv(risk_zonal_zips, here('data/transmission_zipcodes.csv'))
+write_csv(trans_zonal_zips, here('data/transmission_efficiency_zipcodes.csv'))
 ```
 
 
 
 ### Trap data
 
-Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plot showing how number of WNV found in traps across a zipcode changes by month/year.
+Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plots showing how the number of WNV positives found in traps across a zip code change by month/year.
+*NOTE:* A fuller data set is currently being wrangled and standardized for effort by Andy. Well be updated in future.
 ```{r}
 ## Read in raw trap data
-traps <- st_read(here('data/wnv_cases/WNV_full_4_23_CA.shp'))
+traps <- vect(here('data/wnv_cases/WNV_full_4_23_CA.shp'))
 
-zips_kern <- st_read(here("data/zipcodes/kern_zips.shp"))
-
-## make same crs and into terra vectors
-zips_kern <- st_transform(zips_kern, crs = st_crs(traps)) %>% 
-  vect()
-traps <- vect(traps)
+## Read in zips and set to same crs as traps
+zips_kern <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
+  project(y = crs(traps))
 
 
 ## Find intersection using terra (much faster) then
-## convert back to sf to save as csv
+## convert back to sf to save as a .csv
 traps_kern <- terra::intersect(zips_kern, traps)
 traps_kern_sf <- st_as_sf(traps_kern)
-## Save intermediate
+
+## Save intermediate .shp
 # st_write(traps_kern_sf, here('data/wnv_cases/wnv_kern.shp'))
+## Save csv
 # write_csv(traps_kern_sf, here('data/wnv_cases/wnv_kern.csv'))
+```
 
 
+```{r}
 ## Now filter data and create test plots
 cases_kern <- read_csv(here('data/wnv_cases/wnv_kern.csv')) %>% 
   janitor::clean_names()
@@ -247,10 +251,6 @@ ggplot(data = cases_zip_yr_mo, aes(x = year, y = cases))+
     axis.title.y = element_text(face = 'bold', vjust = 3)
   )
 ```
-
-
-
-
 
 
 
@@ -305,9 +305,9 @@ writeRaster(water_reproj, here('data/water/water_reproj.tif'))
 Testing leaflet outside of Shiny app
 
 ```{r}
-wnv_risk <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
+wnv_trans <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
 
-pal <- colorNumeric(palette = 'viridis', domain = values(wnv_risk),
+pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
                     reverse = TRUE,
                     na.color = "transparent")
 
@@ -319,7 +319,7 @@ leaflet() %>%
   addTiles(group = "OpenStreetMaps") %>% 
   addProviderTiles(providers$Stamen.TonerLite, group = "Toner Lite") %>%
   ## Add rasters
-  addRasterImage(wnv_risk, colors = pal, project = FALSE, group = "WNV Risk") %>%
+  addRasterImage(wnv_trans, colors = pal, project = FALSE, group = "WNV Risk") %>%
   # addRasterImage(water_reproj, colors = 'dodgerblue4', project = FALSE, group = "Water") %>% 
   ## Add polygons
   addPolygons(data = zips, color = "#343434", 
@@ -338,7 +338,7 @@ leaflet() %>%
   ) %>% 
   hideGroup("Zip codes") %>% 
   ## Add legend to map
-  addLegend(pal = pal, values = values(wnv_risk),
+  addLegend(pal = pal, values = values(wnv_trans),
             "bottomleft",
             title = "WNV Transmission Risk")%>% 
       setView(-119.3, 35.55, zoom = 11)

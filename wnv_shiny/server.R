@@ -13,7 +13,8 @@ wnv_trans <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
 water <- raster(here('data/water/water_reproj.tif'))
 
 ## Vectors
-zips_sf <- st_read(here("data/zipcodes/kern_zips.shp"))
+zips_sf <- st_read(here('data/zipcodes/kern_zips.shp'))
+kern_sf <- st_read(here('data/counties_ca/kern.shp'))
 
 ## Data frames
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
@@ -255,7 +256,7 @@ function(input, output, session) {
       
       ## Add polygons
       addPolygons(data = zips_sf, color = "#343434",
-                  weight = 3, fillOpacity = 0.1,
+                  weight = 2, fillOpacity = 0.2,
                   label = paste0("Zip code: ", zips_sf$GEOID10),
                   labelOptions = labelOptions(textsize = "11px"),
                   highlight = highlightOptions(weight = 5,
@@ -264,10 +265,14 @@ function(input, output, session) {
                   group = "Zip codes",
                   layerId = ~GEOID10) %>%
       
+      addPolygons(data = kern_sf, 
+                  color = 'black', weight = 4, fillOpacity = 0,
+                  group = "Kern county") %>% 
+      
       ## Create map groups
       addLayersControl(
         baseGroups = c("OpenStreetMaps", "World Imagery"),
-        overlayGroups = c("WNV Risk", "Zip codes", "Standing Water"),
+        overlayGroups = c("WNV Risk", "Zip codes", "Standing Water", "Kern county"),
         options = layersControlOptions(collapsed = TRUE),
         position = "topleft") %>% 
       ## Only raster shows by default

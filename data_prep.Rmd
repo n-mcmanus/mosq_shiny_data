@@ -59,6 +59,10 @@ kern_zips <- terra::project(zips, "+proj=longlat +datum=WGS84")
 ## Save clipped zips
 writeVector(kern_zips, here('data/zipcodes/kern_zips.shp'), overwrite = T)
 
+## Save Kern vect for leaflet too
+kern <- terra::project(kern, "+proj=longlat +datum=WGS84")
+writeVector(kern, here('data/counties_ca/kern.shp'), overwrite = T)
+
 ```
 
 ```{r}
@@ -155,6 +159,7 @@ for (i in 1:length(filenames)) {
 ## export as .csv
 write_csv(zip_water_df, here('data/water/water_acre_zipcode.csv'))
 ```
+
 
 ### Transmission efficiency
 

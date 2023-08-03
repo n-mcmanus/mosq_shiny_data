@@ -26,46 +26,40 @@ In this section, we'll crop and reproject spatial data as well as find zonal sta
 
 ### Zip codes
 
-We want to find and save the zip codes that intersect with Kern county. This .shp will then be exported for use in the Shiny app.
+We want to find and save the zip codes located within the Central Valley portion of Kern county. This .shp will then be exported for use in the Shiny app.
 
-*Note*: For the purposes of this app, the extent of zip codes will be cropped to only portions within Kern county. To keep the entire geometry of zips that are within Kern, see the commented out code chunk below. 
-
+*Note*: For the purposes of this app, the extent of zip codes will be cropped to only portions within both Kern county and the Central Valley. To keep the entire geometry of zips that are within Kern, see the commented out code chunk below. 
 ```{r}
-## Read in raw data using 'sf' package
-zips <- st_read(here('data/zipcodes/CA_Zips.shp'))
-counties <- st_read(here('data/counties_ca/cnty19_1.shp'))
+## Read in data w/ 'sf' pkg (easier to filter by attribute).
+## After filtering, make SpatVect obj (`terra` pkg)
 
-## make sure both layers have same crs
-zips_reproj <- zips %>% 
-  st_transform(zips, crs = st_crs(counties)) %>% 
-  ## only need to keep zip code number
-  dplyr::select(GEOID10) %>% 
-  ## remove incorrect zip
-  dplyr::filter(!GEOID10 == 93453) %>%
-  ## transform to SpatVect obj in `terra` pkg
-  vect()
-
-## isolate Kern county
-kern <- counties %>%
+kern <- st_read(here('data/counties_ca/cnty19_1.shp')) %>% 
+  ## Only keep kern county
   dplyr::filter(COUNTY_NAM == "Kern") %>%
   dplyr::select(COUNTY_NAM) %>% 
-  ## make SpatVect obj
+  terra::vect() 
+
+valley <- st_read(here('data/central_valley/Alluvial_Bnd.shp')) %>% 
+  st_transform(crs = st_crs(counties)) %>% 
   vect() %>% 
-  ## need buffer to remove very small portions
-  ## of zip codes that remain at edges of county
-  buffer(width = -35)
+  ## Only keep portion w/in Kern
+  terra::intersect(kern)
 
-## clip zips to kern county
-kern_zips <- terra::intersect(kern, zips_reproj)
+zips <- st_read(here('data/zipcodes/CA_Zips.shp')) %>% 
+  st_transform(crs = st_crs(counties)) %>% 
+  ## only keep zipcodes
+  dplyr::select(GEOID10) %>% 
+  vect() %>% 
+  terra::intersect(valley)
 
-## make CRS leaflet friendly
-kern_zips <- terra::project(kern_zips, "+proj=longlat +datum=WGS84")
+
+## ensure CRS is leaflet friendly
+kern_zips <- terra::project(zips, "+proj=longlat +datum=WGS84")
 
 ## Save clipped zips
 writeVector(kern_zips, here('data/zipcodes/kern_zips.shp'), overwrite = T)
 
 ```
-
 
 ```{r}
 # ## Read in raw data

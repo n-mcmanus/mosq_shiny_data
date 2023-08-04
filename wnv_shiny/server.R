@@ -33,7 +33,7 @@ pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
 function(input, output, session) {
 
   
-  ### Zip code input -----------------------------------------
+  ### ZIP CODE INPUT ----------------------------------------------------------
   
   ## React to user input and slightly delay response
   zipcode <- reactive(input$zip_box)
@@ -96,7 +96,7 @@ function(input, output, session) {
   
   
   
-  ### Panel elements -----------------------------------------
+  ### PANEL ELEMENTS -----------------------------------------------------------
   
   ## Transmission Risk header
   output$trans_header <- renderText({
@@ -241,7 +241,7 @@ function(input, output, session) {
   
   
   
-  ### Leaflet map ---------------------------------------------
+  ### LEAFLET MAP --------------------------------------------------------------
   output$map <- renderLeaflet({
     leaflet() %>% 
       ## Add background maps
@@ -275,7 +275,8 @@ function(input, output, session) {
         overlayGroups = c("WNV Risk", "Zip codes", "Standing Water", "Kern county"),
         options = layersControlOptions(collapsed = TRUE),
         position = "topleft") %>% 
-      ## Only raster shows by default
+      
+      ## Don't show all layers by default
       hideGroup(c("Zip codes", "Standing Water")) %>% 
       
       ## Add map inset
@@ -301,8 +302,42 @@ function(input, output, session) {
     updateTextInput(session, 
                     inputId = "zip_box", 
                     value = event$id)
+    
+    # test <- zips_sf %>% 
+    #   filter(GEOID10 == event$id)
+    
+    # leafletProxy("map", session) %>% 
+    #   setView()
   })
+
   
+  # zoom <- reactive ({
+  #   
+  #   geom <- zips_sf %>% 
+  #     dplyr::filter(GEOID10 == zipcode_d())
+  #   
+  #   bounds <- geom %>% 
+  #     st_bbox() %>% 
+  #     as.character()
+  #   
+  #   return(bounds)
+  # })
+  
+  observe({
+    click <- input$map_shape_click
+    if(is.null(click))
+      return()
+    
+    geom <- zips_sf %>%
+      dplyr::filter(GEOID10 == click$id)
+
+    bounds <- geom %>%
+      st_bbox() %>% 
+      as.character()
+
+    leafletProxy("map") %>%
+      flyToBounds(lng1 = bounds[1], lat1 = bounds[2], lng2 = bounds[3], lat2 = bounds[4])
+  })
 
 
 } ### END SERVER

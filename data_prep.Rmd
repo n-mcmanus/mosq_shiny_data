@@ -103,38 +103,45 @@ writeVector(kern, here('data/counties_ca/kern.shp'), overwrite = T)
 ### Standing water
 
 Here we'll run zonal stats to determine how much standing water is present in each zip code. This information will be exported as a .csv and used for the Shiny app. To do this, we'll need to first ensure that our `kern_zips.shp` are the same crs as the water rasters. Then we'll use a function to loop through all the water rasters within the directory.
+**NOTE:** Still waiting on some mask files from Dan. Will run when available.
 ```{r}
-## Create list of all water rasters in directory
-filenames <- list.files(path="data/water/Landsat_Dan/", pattern=".TIF")
+## Create paths and lists of water rasters and masks
+path35 <- here('data/water/Landsat_dan/p042r035//')
+path36 <- here('data/water/Landsat_dan/p042r036//')
+rNames35 <- list.files(path=path35, pattern="_T.TIF")
+mNames35 <- list.files(path=path35, pattern="QA_PIXEL.TIF")
+rNames36 <- list.files(path=path36, pattern="_T.TIF")
+mNames36 <- list.files(path=path36, pattern="QA_PIXEL.TIF")
 
 ## Extract dates for each based on LANDSAT naming convention.
+## Same dates for both row 35 and 36 images.
 ## Split up name by underscores, return as own column in df
-dates <- str_split(filenames, "_", simplify = TRUE) %>% 
-  as.data.frame() %>% 
-  mutate(date = lubridate::ymd(V4)) %>% 
+dates <- str_split(rNames35, "_", simplify = TRUE) %>%
+  as.data.frame() %>%
+  mutate(date = lubridate::ymd(V4)) %>%
   dplyr::select(date)
 
 
 ## Need same crs for zonal stats.
 ## Easier to transform vector than the high-res raster
-ex_rast <- rast(here('data/water/Landsat_Dan', filenames[1]))
-names(ex_rast) <- "rast"
-kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
-  project(y = crs(ex_rast))
+r <- rast(paste0(path35, rNames35[1]))
+names(r) <- "rast"
+kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>%
+  project(y = crs(r))
 
 
 ## Function to perform zonal stats and output results
 water_stats <- function(water_rast, zip_vect, rast_date) {
   zonal_stat <- terra::zonal(water_rast, zip_vect, fun = 'sum', na.rm = TRUE)
-  
-  zonal_stat_df <- zonal_stat %>% 
+ 
+  zonal_stat_df <- zonal_stat %>%
     ## assign values with corresponding zipcode
     mutate(zipcode = zip_vect$GEOID10) %>%
     ## convert values from # of pixels to acres
     ## w/30m resolution, each pixel is 900 m^2
     ## 4046.86 m^2 are in one acre
-    rename(water_cells = "rast") %>% 
-    mutate(water_acres = water_cells * 900 / 4046.86) %>% 
+    rename(water_cells = "rast") %>%
+    mutate(water_acres = water_cells * 900 / 4046.86) %>%
     ## finally, add date image was taken
     mutate(date = rast_date)
 }
@@ -142,19 +149,38 @@ water_stats <- function(water_rast, zip_vect, rast_date) {
 ## empty df to store results  
 zip_water_df <- data.frame()
 
-  ## Loop through each raster and add zonal stats to df
-for (i in 1:length(filenames)) {
-  ## read in raster  
-  r <- rast(here('data/water/Landsat_Dan', filenames[i]))
-  names(r) <- "rast"
-  
-  ## find zonal stats using above fxn
-  r_stats <- water_stats(r, kern_zips, dates[i,])
-  
+  ## Loop through each raster and add zonal stats to df ----------------
+for (i in 1:length(rNames35)) {
+  ## raster and mask for row 35 -------------  
+  r35 <- rast(paste0(path35, rNames35[i]))
+  names(r35) <- "rast"
+  m35 <- rast(paste0(path35, mNames35[i]))
+  names(m35) <- "mask"
+  ## mask values of 1 are NA
+  m35[mask == 1] <- NA
+  ## mask raster 35
+  r_masked35 <- terra::mask(r35, m35)
+ 
+  ## raster and mask for row 36 ---------------
+  r36 <- rast(paste0(path36, rNames36[i]))
+  names(r36) <- "rast"
+  m36 <- rast(paste0(path36, mNames36[i]))
+  names(m36) <- "mask"
+  ## mask values of 1 are NA
+  m36[mask == 1] <- NA
+  ## mask raster 36
+  r_masked36 <- terra::mask(r36, m36)
+ 
+  ## merge rasts using SpatRastCollection
+  s <- sprc(r_masked35, r_masked36)
+  m <- merge(s)
+ 
+  ## find zonal stats using fxn created above
+  r_stats <- water_stats(m, kern_zips, dates[i,])
+ 
   ## append df w/raster stats
   zip_water_df <- rbind(zip_water_df, r_stats)
 }
-
 
 ## export as .csv
 write_csv(zip_water_df, here('data/water/water_acre_zipcode.csv'))

@@ -5,11 +5,12 @@ library(leaflet)
 
 
 ## Top bar with title and tabs
-navbarPage("WNV in Kern County", id = "nav",
+navbarPage(title = "WNV in Kern County", id = "nav",
            
            
     ## TAB 1: WNV Interactive map       
     tabPanel("Interactive map",
+             id = "tab1",
         div(class = "outer",
             
             ## Use custom CSS
@@ -65,8 +66,10 @@ navbarPage("WNV in Kern County", id = "nav",
     
     
     
+    
     ## TAB 2: WNV TRAP CASES
     tabPanel("Trap cases",
+             value = "tab2",
              p("This is where we'll have more detailed graphs and exploration of standardized trap data.")
              
              ), ## END TAB 2
@@ -77,9 +80,23 @@ navbarPage("WNV in Kern County", id = "nav",
     
     ## TAB 3: STANDING WATER
     tabPanel("Standing water",
+             value = "tab3",
              p("This is where we'll explore changes of standing water over time with graphs and/or animated GIFs.")
              
-             ) ## END TAB 3
+             ), ## END TAB 3
+    
+    
+    
+    
+    ## TAB 4: INFO
+    tabPanel(title = NULL, icon = icon("info-circle", "fa-1.5x"),
+             value = "tab4",
+             h3("WNV INFO!!"),
+             p("here is more info on mosquito breeding cycle and stuff.")
+             
+    ), ## END TAB 4
+    
+    
     
     
 ) ## END UI

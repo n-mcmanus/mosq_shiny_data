@@ -1,12 +1,13 @@
 ### READ IN DATA AND PACKAGES
 
 library(shiny)
-library(tidyverse)
-library(lubridate)
-library(leaflet)
-library(raster)
-library(sf)
-library(here)
+library(shinyalert)    ## Modals
+library(tidyverse)     ## Always
+library(here)          ## Easier reading/writing data
+library(lubridate)     ## Wrangling/plotting dates
+library(leaflet)       ## Interactive map
+library(raster)        ## Leaflet-friendly raster pkg
+library(sf)            ## Leaflet-friendly vector pkg
 
 ## Rasters
 wnv_trans <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
@@ -31,7 +32,35 @@ pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
 
 ### START SERVER
 function(input, output, session) {
+  
+  ### WELCOME MODAL -----------------------------------------------------------
+  
+  ## Initial modal on app launch
+  shinyalert(
+    title = "Welcome",
+    text = "This app let's you explore the risks and hazards associated with West Nile Virus (WNV). Only the extent of zip codes within Kern County and the Great Valley are used. For more information on WNV transmission and the data used for this app, select the 'More Info' button or click on the information icon at the top of the page.",
+    size = "m", 
+    closeOnEsc = TRUE,
+    closeOnClickOutside = TRUE,
+    html = FALSE,
+    type = "",
+    showConfirmButton = TRUE,
+    showCancelButton = TRUE,
+    confirmButtonText = "More Info",
+    confirmButtonCol = "#AEDEF4",
+    cancelButtonText = "View Map",
+    timer = 0,
+    imageUrl = "",
+    animation = TRUE
+  )
 
+  ## Go to "info" tab if button pressed
+  observeEvent(input$shinyalert, {
+    if (input$shinyalert == TRUE) {
+      updateNavbarPage(session, "nav", selected = "tab4")
+    }
+  })
+  
   
   ### ZIP CODE INPUT ----------------------------------------------------------
   

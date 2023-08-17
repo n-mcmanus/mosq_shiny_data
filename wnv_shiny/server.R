@@ -16,6 +16,7 @@ water <- raster(here('data/water/water_reproj.tif'))
 ## Vectors
 zips_sf <- st_read(here('data/zipcodes/kern_zips.shp'))
 kern_sf <- st_read(here('data/counties_ca/kern.shp'))
+valley_sf <- st_read(here('data/central_valley/valley.shp'))
 
 ## Data frames
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
@@ -38,11 +39,11 @@ function(input, output, session) {
   ## Initial modal on app launch
   shinyalert(
     title = "Welcome",
-    text = "This app let's you explore the risks and hazards associated with West Nile Virus (WNV). Only the extent of zip codes within Kern County and the Great Valley are used. For more information on WNV transmission and the data used for this app, select the 'More Info' button or click on the information icon at the top of the page.",
+    text = paste0("This app let's you explore the risks and hazards associated with West Nile Virus (WNV) in Kern County, California. Information by zip code* can be viewed by either manually typing the zip code at the upper right, or clicking the zip code on the map.", "<br>", "<br>", "For more information on WNV transmission and the data used for this app, select the 'More Info' button or click on the information icon at the top of the page.", "<br>", "<br>", "<span style='font-size: 13px;'>", "<i>", "*(Note: Zip code boundaries have been limited to the extent present within both Kern County and the California Central Valley. These boundaries can be visually toggled by (un)selecting layers listed at the top left of the map.", "</i>", ")",  "</span>"),
     size = "m", 
     closeOnEsc = TRUE,
     closeOnClickOutside = TRUE,
-    html = FALSE,
+    html = TRUE,
     type = "",
     showConfirmButton = TRUE,
     showCancelButton = TRUE,
@@ -277,13 +278,17 @@ function(input, output, session) {
       addTiles(group = "OpenStreetMaps") %>% 
       addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
       
-      ## Add rasters
+      ## Add rasters -------------------------------
+      ### Transmission efficiency
       addRasterImage(wnv_trans, colors = pal, 
                      project = FALSE, group = "WNV Risk") %>%
+      
+      # ### Standing water
       # addRasterImage(water, colors = 'dodgerblue4',
       #                project = FALSE, group = "Standing Water") %>%
       
-      ## Add polygons
+      ## Add vectors ---------------------------------
+      ### Zip codes
       addPolygons(data = zips_sf, color = "#343434",
                   weight = 2, fillOpacity = 0.2,
                   label = paste0("Zip code: ", zips_sf$GEOID10),
@@ -292,78 +297,64 @@ function(input, output, session) {
                                                color = "white",
                                                bringToFront = TRUE),
                   group = "Zip codes",
-                  layerId = ~GEOID10) %>%
+                  layerId = ~GEOID10) %>%  
+    
+      ### Kern county
+      addPolylines(data = kern_sf,
+                   color = 'black', weight = 4, fillOpacity = 0,
+                   group = "Kern county") %>% 
       
-      addPolygons(data = kern_sf, 
-                  color = 'black', weight = 4, fillOpacity = 0,
-                  group = "Kern county") %>% 
+      ### Central valley
+      addPolylines(data = valley_sf,
+                   color = 'blue', weight = 3, fillOpacity = 0,
+                   group = "Central Valley") %>% 
       
-      ## Create map groups
+      ## Create map groups -----------------------------
       addLayersControl(
         baseGroups = c("OpenStreetMaps", "World Imagery"),
-        overlayGroups = c("WNV Risk", "Zip codes", "Standing Water", "Kern county"),
+        overlayGroups = c("WNV Risk", "Standing Water", "Zip codes", "Kern county", "Central Valley"),
         options = layersControlOptions(collapsed = TRUE),
         position = "topleft") %>% 
       
       ## Don't show all layers by default
-      hideGroup(c("Zip codes", "Standing Water")) %>% 
+      hideGroup(c("Standing Water", "Central Valley")) %>% 
       
-      ## Add map inset
+      ## Add map inset ---------------------------------
       addMiniMap(
         tiles = providers$Esri.WorldStreetMap,
         zoomLevelOffset = -5,
         position = 'bottomleft',
         toggleDisplay = TRUE) %>% 
       
-      ## Add legend to map
+      ## Add legend ------------------------------------
       addLegend(pal = pal, values = values(wnv_trans),
                 position = "topleft",
                 title = "WNV Transmission </br> Efficiency") %>% 
-      setView(-119.3, 35.55, zoom = 10)
-  })
+      setView(-119.2, 35.38, zoom = 10)
+  }) ## END LEAFLET
   
   
   ## Click on zip code polygon
   ## to input value in text box
+  ## and zoom to zip code
   observe({
     event <- input$map_shape_click
+    if(is.null(event$id))
+      return()
     
+    ## change text box value
     updateTextInput(session, 
                     inputId = "zip_box", 
                     value = event$id)
     
-    # test <- zips_sf %>% 
-    #   filter(GEOID10 == event$id)
-    
-    # leafletProxy("map", session) %>% 
-    #   setView()
-  })
-
-  
-  # zoom <- reactive ({
-  #   
-  #   geom <- zips_sf %>% 
-  #     dplyr::filter(GEOID10 == zipcode_d())
-  #   
-  #   bounds <- geom %>% 
-  #     st_bbox() %>% 
-  #     as.character()
-  #   
-  #   return(bounds)
-  # })
-  
-  observe({
-    click <- input$map_shape_click
-    if(is.null(click))
-      return()
-    
+    ## establish zip code boundaries
     geom <- zips_sf %>%
-      dplyr::filter(GEOID10 == click$id)
-
+      dplyr::filter(GEOID10 == event$id)
     bounds <- geom %>%
-      st_bbox() %>% 
+      st_bbox() %>%
       as.character()
-
+    
+    ## Zoom to zipcode
     leafletProxy("map") %>%
       flyToBounds(lng1 = bounds[1], lat1 = bounds[2], lng2 = bounds[3], lat2 = bounds[4])
   })

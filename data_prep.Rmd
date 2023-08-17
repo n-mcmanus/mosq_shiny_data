@@ -40,13 +40,13 @@ kern <- st_read(here('data/counties_ca/cnty19_1.shp')) %>%
   terra::vect() 
 
 valley <- st_read(here('data/central_valley/Alluvial_Bnd.shp')) %>% 
-  st_transform(crs = st_crs(counties)) %>% 
+  st_transform(crs = st_crs(kern)) %>% 
   vect() %>% 
   ## Only keep portion w/in Kern
   terra::intersect(kern)
 
 zips <- st_read(here('data/zipcodes/CA_Zips.shp')) %>% 
-  st_transform(crs = st_crs(counties)) %>% 
+  st_transform(crs = st_crs(kern)) %>% 
   ## only keep zipcodes
   dplyr::select(GEOID10) %>% 
   vect() %>% 
@@ -59,9 +59,12 @@ kern_zips <- terra::project(zips, "+proj=longlat +datum=WGS84")
 ## Save clipped zips
 writeVector(kern_zips, here('data/zipcodes/kern_zips.shp'), overwrite = T)
 
-## Save Kern vect for leaflet too
+## Save Kern and Valley vect for leaflet too
 kern <- terra::project(kern, "+proj=longlat +datum=WGS84")
 writeVector(kern, here('data/counties_ca/kern.shp'), overwrite = T)
+
+valley <- terra::project(valley, "+proj=longlat +datum=WGS84")
+writeVector(valley, here('data/central_valley/valley.shp'), overwrite = T)
 
 ```
 

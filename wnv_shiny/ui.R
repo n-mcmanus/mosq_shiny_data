@@ -33,7 +33,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
               
               ## User inputs zipcode
               textInput(inputId = "zip_box", label = h3("Zip code:"),
-                        value = NA,
+                        value = NULL,
                         placeholder = "Enter your zip code..."
                         ),
               

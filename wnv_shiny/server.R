@@ -2,6 +2,7 @@
 
 library(shiny)
 library(shinyalert)    ## Modals
+library(shinyvalidate) ## Text box validation messages
 library(tidyverse)     ## Always
 library(here)          ## Easier reading/writing data
 library(lubridate)     ## Wrangling/plotting dates
@@ -69,19 +70,47 @@ function(input, output, session) {
   zipcode <- reactive(input$zip_box)
   zipcode_d <- debounce(zipcode, millis = 1500)
   
-  ## Return error if user submits a number
-  ## with length other than 5 or 0 (e.g. no entry)
-  observeEvent(zipcode_d(), {
-    if (nchar(zipcode_d()) != 5 & nchar(zipcode_d()) != 0)
-    {
-      updateTextInput(session, 'zip_box', value = NA)
-      showModal(modalDialog(
-          title = "Error!",
-          "Only 5-character entries are permitted.",
-          easyClose = TRUE)
-      )
+  ## Validation text below zip box
+  iv <- InputValidator$new()
+  ### Must be 5 numbers
+  iv$add_rule("zip_box", function(length) {
+    length = nchar(zipcode_d())
+    if (length !=5 & length != 0) {
+      "Only 5-character entries are permitted."
     }
   })
+  ### Must be zip in Kern
+  iv$add_rule("zip_box", function(zipcode_d) {
+    if (!(zipcode_d() %in% zips_sf$GEOID10) & nchar(zipcode_d()) != 0) {
+      "Please enter a valid zip code."
+    } 
+  })
+  iv$enable()
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  ## Return error if user submits a number
+  ## with length other than 5 or 0 (e.g. no entry)
+  # observeEvent(zipcode_d(), {
+  #   if (nchar(zipcode_d()) != 5 & nchar(zipcode_d()) != 0)
+  #   {
+  #     updateTextInput(session, 'zip_box', value = NA)
+  #     showModal(modalDialog(
+  #         title = "Error!",
+  #         "Only 5-character entries are permitted.",
+  #         easyClose = TRUE)
+  #     )
+  #   }
+  # })
   
   
   ## Filter water data based on zip input
@@ -131,7 +160,7 @@ function(input, output, session) {
   ## Transmission Risk header
   output$trans_header <- renderText({
     ## If invalid zip input, don't show text
-    if (nchar(zipcode_d()) != 5) {
+    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else {
       paste("<h3>", "Transmission Risk:", "</h3>")
@@ -141,7 +170,7 @@ function(input, output, session) {
   ## Reactive transmission text
   output$zip_risk <- renderText({
     ## If invalid zip input, don't show text
-    if(nchar(zipcode_d()) != 5) {
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
       ## If there is no trans data for zipcode
     } else if (is.na(trans_zip())) {
@@ -156,7 +185,7 @@ function(input, output, session) {
   
   ## Standing water header
   output$water_header <- renderText({
-    if(nchar(zipcode_d()) != 5) {
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else {
       paste("<h3>", "Standing water:", "</h3>")
@@ -165,7 +194,7 @@ function(input, output, session) {
   
   ## Standing water time series
   output$water_plot <- renderPlot({
-   if (nchar(zipcode_d()) != 5)
+   if (!(zipcode_d() %in% zips_sf$GEOID10))
      return(NULL)
      
     ggplot(data = water_zip(), aes(x = date, y = water_acres)) +
@@ -189,8 +218,8 @@ function(input, output, session) {
   
   ## Trap header
   output$trap_header <- renderText({
-    ## If no zip input, don't show text
-    if(nchar(zipcode_d()) != 5) {
+    ## If invalid zip, don't show text
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else {
       paste("<h3>", "Trap Data:", "</h3>")
@@ -199,7 +228,7 @@ function(input, output, session) {
   
   ## Trap year/month box
   output$trap_time <- renderUI({
-    if(nchar(zipcode_d()) != 5) {
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else {
       selectInput("trap_time", label = "Select timeframe:",
@@ -211,7 +240,7 @@ function(input, output, session) {
   
   ## Trap month box
   output$trap_month <- renderUI({
-    if(nchar(zipcode_d())!=5) {
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
       ## only appear if correct zip input AND 
       ## first box is monthly
@@ -235,7 +264,7 @@ function(input, output, session) {
   
   ## Standing water time series plots
   output$trap_plot <- renderPlot({
-    if (nchar(zipcode_d()) != 5) {
+    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else if (input$trap_time == "annual") {
       ggplot(data = trap_data(), aes(x = Year, y = cases)) +

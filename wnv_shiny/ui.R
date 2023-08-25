@@ -42,35 +42,63 @@ navbarPage(title = "WNV in Kern County", id = "nav",
               htmlOutput("zip_risk"),
               br(),
               
+              ## Temp plot
+              htmlOutput("temp_header"),
+              plotOutput("temp_plot", height = 180),
+              
               ## Standing water plot
               htmlOutput("water_header"),
               plotOutput("water_plot", height = 180),
-              br(),
-              
-              ## Trap plots
-              htmlOutput("trap_header"),
-              fluidRow(   ## put both input boxes in-line
-                column(width = 6, uiOutput("trap_time")),
-                column(width = 6, uiOutput("trap_month"))
-              ),
-              plotOutput("trap_plot", height = 180)
+              br()
               
               
         ) ## End panel
-            
-            
             ),
-        
-        
            ), ## END TAB 1
     
     
     
     
-    ## TAB 2: WNV TRAP CASES
+    ## TAB 2: WNV TRAP CASES ---------------------------------------------------
     tabPanel("Trap cases",
              value = "tab2",
-             p("This is where we'll have more detailed graphs and exploration of standardized trap data.")
+             h2("Mosquito and WNV Abundance"),
+             p("This is some more info and copy about the data. Such as: Mosquito abundance and WNV data comes from trapping efforts by the Kern County Vector Control Board. Stuff about methodology: Traps are layed out and checked every 1-X days. These pools of mosquitos are then tested for WNV. To standardize for monitoring effort, abundance and WNV cases have been standardized to cases per night."),
+             p("You can view information by zip code either by entering the zip code of interest on the left-hand panel, or by clicking on the zip code within the map on the right."),
+             ### Side Panel: 
+             sidebarPanel(
+               h3(strong("Trap information:")),
+               ### Zipcode input:
+               textInput(inputId = "zip_box_trap", label = h4("Zip code:"),
+                         value = NULL,
+                         placeholder = "Enter your zip code..."
+               ),
+               br(),
+               ### Abundance/WNV:
+               radioButtons("trapRadio", label = h4("Metric:"),
+                            inline = TRUE,
+                            choices = c("Abundance" = "abundance",
+                                        "WNV positive" = "wnv")),
+               br(),
+               ### Time period:
+               h4("Time period:"),
+               fluidRow(   ## put both input boxes in-line
+                 column(width = 6, selectInput("trapAnnual", label = "Select timeframe:",
+                                               choices = list("Annual" = "annual",
+                                                              "Monthly" = "monthly",
+                                                              "Custom" = "custom"),
+                                               selected = "annual")),
+                 column(width = 6, uiOutput("trapMonth"))
+               ),
+               uiOutput("trapDates"),
+               
+             ), ### End side panel
+             
+             mainPanel(
+               leafletOutput("trapMap", height = "400px"),
+               htmlOutput("trapMap_caption"),
+               plotOutput("trap_plot"))
+             
              
              ), ## END TAB 2
     
@@ -91,8 +119,15 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     ## TAB 4: INFO
     tabPanel(title = NULL, icon = icon("info-circle", "fa-1.5x"),
              value = "tab4",
-             h3("WNV INFO!!"),
-             p("here is more info on mosquito breeding cycle and stuff.")
+             h3("West Nile Virus:"),
+             p("West Nile Virus (WNV) is one of 15 known mosquito-borne diseases in California (newsom). In North America, WNV was first detected in New York in 1999 (Lanciotti); the virus rapidly spread across the continent, reaching southern California by 2003 (Reisen) and spreading to all 58 counties in the state within a year (Hartley). Currently, WNV is the most prevalent mosquito-borne disease in California, having infected over 7,500 people and killing 345 between 2003 and 2022 (Newsom)."),
+             tabsetPanel(type = "tabs",
+                         tabPanel("Spread:", p("WNV is mainly spread by mosquitoes in the genus Culex (Hartley; Bosner))"),
+                                  img(src='culex_lifecycle.jpg', align = 'middle')),
+                         tabPanel("Risk factors:", 
+                                  p("Here we'll discuss what can lead to increased risk of WNV, such as amount of standing water, daily temperature, proximity to avian vectors, etc.")),
+                         tabPanel("Symptoms:", p("The majority (8 out of 10) of people infected with WNV remain asymptomatic; those who do develop symptoms may experience fever, head and body aches, vomiting, and fatigue. Roughly 1 in 150 people develop serious symptoms including encephalitis or meningitis, which can result in death. (CDC). ")))
+             # p("here is more info on mosquito breeding cycle and stuff.")
              
     ), ## END TAB 4
     

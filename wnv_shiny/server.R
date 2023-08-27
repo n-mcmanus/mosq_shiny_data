@@ -2,6 +2,7 @@
 
 library(shiny)
 library(shinyalert)    ## Modals
+library(shinyvalidate) ## Text box validation messages
 library(tidyverse)     ## Always
 library(here)          ## Easier reading/writing data
 library(lubridate)     ## Wrangling/plotting dates
@@ -21,7 +22,7 @@ valley_sf <- st_read(here('data/central_valley/valley.shp'))
 ## Data frames
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
 trans_zip_df <- read_csv(here('data/transmission_efficiency_zipcodes.csv'))
-cases_kern_df <- read_csv(here('data/wnv_cases/wnv_kern.csv'))
+cases_kern_df <- read_csv(here('data/traps/wnv_kern.csv'))
 
 ## Raster color palette
 pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
@@ -62,26 +63,55 @@ function(input, output, session) {
     }
   })
   
+  ### TAB 1 - Interactive Map ##################################################
   
-  ### ZIP CODE INPUT ----------------------------------------------------------
+  ### ZIP CODE INPUT ----------------------------------------------------
   
   ## React to user input and slightly delay response
   zipcode <- reactive(input$zip_box)
   zipcode_d <- debounce(zipcode, millis = 1500)
   
-  ## Return error if user submits a number
-  ## with length other than 5 or 0 (e.g. no entry)
-  observeEvent(zipcode_d(), {
-    if (nchar(zipcode_d()) != 5 & nchar(zipcode_d()) != 0)
-    {
-      updateTextInput(session, 'zip_box', value = NA)
-      showModal(modalDialog(
-          title = "Error!",
-          "Only 5-character entries are permitted.",
-          easyClose = TRUE)
-      )
+  ## Validation text below zip box
+  iv <- InputValidator$new()
+  ### Must be 5 numbers
+  iv$add_rule("zip_box", function(length) {
+    length = nchar(zipcode_d())
+    if (length !=5 & length != 0) {
+      "Only 5-character entries are permitted."
     }
   })
+  ### Must be zip in Kern
+  iv$add_rule("zip_box", function(zipcode_d) {
+    if (!(zipcode_d() %in% zips_sf$GEOID10) & nchar(zipcode_d()) != 0) {
+      "Please enter a valid zip code."
+    } 
+  })
+  iv$enable()
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  ## Return error if user submits a number
+  ## with length other than 5 or 0 (e.g. no entry)
+  # observeEvent(zipcode_d(), {
+  #   if (nchar(zipcode_d()) != 5 & nchar(zipcode_d()) != 0)
+  #   {
+  #     updateTextInput(session, 'zip_box', value = NA)
+  #     showModal(modalDialog(
+  #         title = "Error!",
+  #         "Only 5-character entries are permitted.",
+  #         easyClose = TRUE)
+  #     )
+  #   }
+  # })
   
   
   ## Filter water data based on zip input
@@ -103,26 +133,11 @@ function(input, output, session) {
     return(trans_mean)
   })
   
-  
-  ## Filter trap data by user input
-  trap_data <- reactive ({
+  ## Total avg transmission risk for Kern
+  trans_kern <- trans_zip_df %>% 
+    filter(zipcode == "Kern")
     
-    month_selected <- input$trap_month
-    
-    x <- if(input$trap_time == "annual") {
-      filtered_year <- cases_kern_df %>% 
-        filter(GEOID10 == zipcode_d()) %>% 
-        group_by(Year) %>% 
-        summarize(cases = sum(Count))
-    } else {
-      filtered_month <- cases_kern_df %>% 
-        filter(GEOID10 == zipcode_d(),
-               Month == month_selected) %>% 
-        group_by(Year) %>% 
-        summarize(cases = sum(Count))
-    }
-    return(x)
-  })
+
   
   
   
@@ -131,24 +146,24 @@ function(input, output, session) {
   ## Transmission Risk header
   output$trans_header <- renderText({
     ## If invalid zip input, don't show text
-    if (nchar(zipcode_d()) != 5) {
+    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else {
-      paste("<h3>", "Transmission Risk:", "</h3>")
+      paste0("<h3>", "Transmission (R",'<sub>', '0','</sub>', "):", "</h3>")
     }
   })
   
   ## Reactive transmission text
   output$zip_risk <- renderText({
     ## If invalid zip input, don't show text
-    if(nchar(zipcode_d()) != 5) {
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
       ## If there is no trans data for zipcode
     } else if (is.na(trans_zip())) {
-      print("Transmission data unavailable for this zip code.")
+      paste0("The average R",'<sub>', '0','</sub>', " across Kern County is: ","<b>",round(trans_kern[1,1],3),"</b>", "<br>", "<br>", "No transmission data are available for the selected zip code.")
     } else {
       ## Text for valid zips
-      paste('The average transmission risk for zip code', "<i>",zipcode_d(),"</i>","is:", "<b>",trans_zip(),"</b>")
+      paste("The average R",'<sub>', '0','</sub>', " across Kern County is: ", "<b>",round(trans_kern[1,1],3),"</b>", "<br>", "<br>", 'The average R','<sub>', '0','</sub>', ' within zip code ', zipcode_d(), "is: ", "<b>",trans_zip(),"</b>")
     }
   })
   
@@ -156,7 +171,7 @@ function(input, output, session) {
   
   ## Standing water header
   output$water_header <- renderText({
-    if(nchar(zipcode_d()) != 5) {
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else {
       paste("<h3>", "Standing water:", "</h3>")
@@ -165,7 +180,7 @@ function(input, output, session) {
   
   ## Standing water time series
   output$water_plot <- renderPlot({
-   if (nchar(zipcode_d()) != 5)
+   if (!(zipcode_d() %in% zips_sf$GEOID10))
      return(NULL)
      
     ggplot(data = water_zip(), aes(x = date, y = water_acres)) +
@@ -187,84 +202,49 @@ function(input, output, session) {
   })
   
   
-  ## Trap header
-  output$trap_header <- renderText({
-    ## If no zip input, don't show text
-    if(nchar(zipcode_d()) != 5) {
+  ## Temp header
+  output$temp_header <- renderText({
+    ## If invalid zip, don't show text
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else {
-      paste("<h3>", "Trap Data:", "</h3>")
+      paste("<h3>", "Temperature Data:", "</h3>")
     }
   })
   
-  ## Trap year/month box
-  output$trap_time <- renderUI({
-    if(nchar(zipcode_d()) != 5) {
-      return(NULL)
-    } else {
-      selectInput("trap_time", label = "Select timeframe:",
-                  choices = list("Annual" = "annual",
-                                 "Monthly" = "monthly"),
-                  selected = "annual")
-    } 
-  })
-  
-  ## Trap month box
-  output$trap_month <- renderUI({
-    if(nchar(zipcode_d())!=5) {
-      return(NULL)
-      ## only appear if correct zip input AND 
-      ## first box is monthly
-    } else if (input$trap_time == "annual") {
-      return(NULL)
-    } else {
-      selectInput("trap_month", label = "Select month:",
-                  choices = list("March" = "Mar",
-                                 "April" = "Apr",
-                                 "May" = "May",
-                                 "June" = "Jun",
-                                 "July" = "Jul",
-                                 "August" = "Aug",
-                                 "September" = "Sep",
-                                 "October" = "Oct",
-                                 "November" = "Nov"),
-                  selected = "Aug")
-    }
-  })
-  
-  
-  ## Standing water time series plots
-  output$trap_plot <- renderPlot({
-    if (nchar(zipcode_d()) != 5) {
-      return(NULL)
-    } else if (input$trap_time == "annual") {
-      ggplot(data = trap_data(), aes(x = Year, y = cases)) +
-        geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-        geom_line(linewidth = 0.6, color = "sienna4") +
-        labs(y = "Annual trapped cases",
-             x = "Year") +
-        theme_classic() +
-        theme(
-          # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.title.x = element_text(vjust = -1, size = 14),
-          axis.text = element_text(size = 13)
-        ) 
-    } else {
-      ggplot(data = trap_data(), aes(x = Year, y = cases)) +
-        geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-        geom_line(linewidth = 0.6, color = "sienna4") +
-        labs(y = "Monthly trapped cases",
-             x = "Year") +
-        theme_classic() +
-        theme(
-          # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.title.x = element_text(vjust = -1, size = 14),
-          axis.text = element_text(size = 13)
-        ) 
-    }
-  })
+
+  ## Daily temp plot
+  # output$trap_plot <- renderPlot({
+  #   if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+  #     return(NULL)
+  #   } else if (input$trap_time == "annual") {
+  #     ggplot(data = trap_data(), aes(x = Year, y = cases)) +
+  #       geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+  #       geom_line(linewidth = 0.6, color = "sienna4") +
+  #       labs(y = "Annual trapped cases",
+  #            x = "Year") +
+  #       theme_classic() +
+  #       theme(
+  #         # axis.title.x = element_text(face = "bold", vjust = -1),
+  #         axis.title.y = element_text(vjust = 2, size = 14),
+  #         axis.title.x = element_text(vjust = -1, size = 14),
+  #         axis.text = element_text(size = 13)
+  #       ) 
+  #   } else {
+  #     ggplot(data = trap_data(), aes(x = Year, y = cases)) +
+  #       geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+  #       geom_line(linewidth = 0.6, color = "sienna4") +
+  #       labs(y = "Monthly trapped cases",
+  #            x = "Year") +
+  #       theme_classic() +
+  #       theme(
+  #         # axis.title.x = element_text(face = "bold", vjust = -1),
+  #         axis.title.y = element_text(vjust = 2, size = 14),
+  #         axis.title.x = element_text(vjust = -1, size = 14),
+  #         axis.text = element_text(size = 13)
+  #       ) 
+  #   }
+  # })
   
 
 
@@ -281,7 +261,7 @@ function(input, output, session) {
       ## Add rasters -------------------------------
       ### Transmission efficiency
       addRasterImage(wnv_trans, colors = pal, 
-                     project = FALSE, group = "WNV Risk") %>%
+                     project = FALSE, group = "R0") %>%
       
       # ### Standing water
       # addRasterImage(water, colors = 'dodgerblue4',
@@ -312,12 +292,12 @@ function(input, output, session) {
       ## Create map groups -----------------------------
       addLayersControl(
         baseGroups = c("OpenStreetMaps", "World Imagery"),
-        overlayGroups = c("WNV Risk", "Standing Water", "Zip codes", "Kern county", "Central Valley"),
+        overlayGroups = c("R0", "Standing Water", "Zip codes", "Kern county", "Central Valley"),
         options = layersControlOptions(collapsed = TRUE),
         position = "topleft") %>% 
       
       ## Don't show all layers by default
-      hideGroup(c("Standing Water", "Central Valley")) %>% 
+      hideGroup(c("R0", "Standing Water", "Central Valley")) %>% 
       
       ## Add map inset ---------------------------------
       addMiniMap(
@@ -327,15 +307,15 @@ function(input, output, session) {
         toggleDisplay = TRUE) %>% 
       
       ## Add legend ------------------------------------
-      addLegend(pal = pal, values = values(wnv_trans),
-                position = "topleft",
-                title = "WNV Transmission </br> Efficiency") %>% 
+      # addLegend(pal = pal, values = values(wnv_trans),
+      #           position = "topleft",
+      #           title = "WNV Transmission </br> Efficiency") %>% 
       setView(-119.2, 35.38, zoom = 10)
   }) ## END LEAFLET
   
+  ### Interactive Leaflet elements: 
   
-  ## Click on zip code polygon
-  ## to input value in text box
+  ## Click on zip code polygon to input value in text box
   ## and zoom to zip code
   observe({
     event <- input$map_shape_click
@@ -359,5 +339,199 @@ function(input, output, session) {
       flyToBounds(lng1 = bounds[1], lat1 = bounds[2], lng2 = bounds[3], lat2 = bounds[4])
   })
 
+  
+  
+  
+  ### TAB 2 - Trap Data ##########################################################
+  
+  ### RESPONSIVE SIDE PANEL WIDGETS ------------------------------------------
+  
+  ## Zip code box
+    ## React to user input and slightly delay response
+    zipcodeTrap <- reactive(input$zip_box_trap)
+    zipcodeTrap_d <- debounce(zipcodeTrap, millis = 1500)
+    
+    ## Validation text below zip box
+    ivTrap <- InputValidator$new()
+    ### Must be 5 numbers
+    ivTrap$add_rule("zip_box_trap", function(length) {
+      length = nchar(zipcodeTrap_d())
+      if (length !=5 & length != 0) {
+        "Only 5-character entries are permitted."
+      }
+    })
+    ### Must be zip in Kern
+    ivTrap$add_rule("zip_box_trap", function(zipcodeTrap_d) {
+      if (!(zipcodeTrap_d() %in% zips_sf$GEOID10) & nchar(zipcodeTrap_d()) != 0) {
+        "Please enter a valid zip code."
+      } 
+    })
+    ivTrap$enable()
+  
 
+  ## Trap month box
+  output$trapMonth <- renderUI({
+    if (input$trapAnnual != "monthly") {
+      return(NULL)
+    } else {
+      selectInput("trapMonth", label = "Select month:",
+                  choices = list("March" = "Mar",
+                                 "April" = "Apr",
+                                 "May" = "May",
+                                 "June" = "Jun",
+                                 "July" = "Jul",
+                                 "August" = "Aug",
+                                 "September" = "Sep",
+                                 "October" = "Oct",
+                                 "November" = "Nov"),
+                  selected = "Aug")
+    }
+  })
+  
+  ## Custom date range
+  output$trapDates <- renderUI({
+    if (input$trapAnnual != "custom") {
+      return(NULL)
+    } else {
+      dateRangeInput("trapDates", label = "Date range:")
+    }
+  })
+  
+  ### TRAP MAP ------------------------------------------------------------
+  output$trapMap <- renderLeaflet({
+    leaflet() %>% 
+      ## Add background maps
+      addTiles(group = "OpenStreetMaps") %>% 
+      addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
+  
+      ### Zip codes
+      addPolygons(data = zips_sf, color = "#343434",
+                  weight = 2, fillOpacity = 0.2,
+                  label = paste0("Zip code: ", zips_sf$GEOID10),
+                  labelOptions = labelOptions(textsize = "11px"),
+                  highlight = highlightOptions(weight = 5,
+                                               color = "white",
+                                               bringToFront = TRUE),
+                  group = "Zip codes",
+                  layerId = ~GEOID10) %>%  
+        
+        ### Kern county
+        addPolylines(data = kern_sf,
+                     color = 'black', weight = 4, fillOpacity = 0,
+                     group = "Kern county") %>% 
+        
+        ### Central valley
+        addPolylines(data = valley_sf,
+                     color = 'blue', weight = 3, fillOpacity = 0,
+                     group = "Central Valley") %>% 
+      
+        ## Create map groups
+        addLayersControl(
+          baseGroups = c("OpenStreetMaps", "World Imagery"),
+          overlayGroups = c("Zip codes", "Kern county", "Central Valley"),
+          options = layersControlOptions(collapsed = TRUE),
+          position = "topleft") %>% 
+          
+          ## Don't show all layers by default
+          hideGroup(c("Kern county")) %>% 
+          
+        ## Add map inset
+        addMiniMap(
+          tiles = providers$Esri.WorldStreetMap,
+          zoomLevelOffset = -5,
+          position = 'bottomright',
+          toggleDisplay = TRUE) %>% 
+          
+          ## Add legend ------------------------------------
+        # addLegend(pal = pal, values = values(wnv_trans),
+        #           position = "topleft",
+        #           title = "WNV Transmission </br> Efficiency") %>% 
+        setView(-119.2, 35.38, zoom = 9)
+  }) ## END LEAFLET
+  
+  
+  ### Interactive Leaflet elements: 
+  ## Click on zip code polygon to input value in text box
+  ## and zoom to zip code
+  observe({
+    event <- input$trapMap_shape_click
+    if(is.null(event$id))
+      return()
+    
+    ## change text box value
+    updateTextInput(session, 
+                    inputId = "zip_box_trap", 
+                    value = event$id)
+  })
+  
+  
+  ## Reactive caption for map
+  output$trapMap_caption <- renderText({
+    paste("<b>","Figure 1:","</b>","Interactive map of mosquito and WNV abundance by zip codes within the Central Valley and Kern County, California. In this selected scenario, darker zip codes represent areas with greater ", "<b>","(select: abundance/WNV)","</b>", ". Across all zip codes,", "<b>","(select: abundance/WNV)","</b>","(select:between/for date range)", "equaled", "<b>","X","</b>")
+  })
+  
+  
+  
+  ### FILTER TRAP DATA ----------------------------------------------------
+  ## Filter trap data by user input
+  trap_data <- reactive ({
+    
+    month_selected <- input$trapMonth
+    
+    x <- if(input$trap_time == "annual") {
+      filtered_year <- cases_kern_df %>% 
+        filter(GEOID10 == zipcodeTrap_d()) %>% 
+        group_by(Year) %>% 
+        summarize(cases = sum(Count))
+    } else {
+      filtered_month <- cases_kern_df %>% 
+        filter(GEOID10 == zipcodeTrap_d(),
+               Month == month_selected) %>% 
+        group_by(Year) %>% 
+        summarize(cases = sum(Count))
+    }
+    return(x)
+  })
+  
+  
+ 
+  
+  
+  ## Trap plot
+  output$trap_plot <- renderPlot({
+    if (!(zipcodeTrap_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else if (input$trap_time == "annual") {
+      ggplot(data = trap_data(), aes(x = Year, y = cases)) +
+        geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+        geom_line(linewidth = 0.6, color = "sienna4") +
+        labs(y = "Annual trapped cases",
+             x = "Year") +
+        theme_classic() +
+        theme(
+          # axis.title.x = element_text(face = "bold", vjust = -1),
+          axis.title.y = element_text(vjust = 2, size = 14),
+          axis.title.x = element_text(vjust = -1, size = 14),
+          axis.text = element_text(size = 13)
+        ) 
+    } else {
+      ggplot(data = trap_data(), aes(x = Year, y = cases)) +
+        geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+        geom_line(linewidth = 0.6, color = "sienna4") +
+        labs(y = "Monthly trapped cases",
+             x = "Year") +
+        theme_classic() +
+        theme(
+          # axis.title.x = element_text(face = "bold", vjust = -1),
+          axis.title.y = element_text(vjust = 2, size = 14),
+          axis.title.x = element_text(vjust = -1, size = 14),
+          axis.text = element_text(size = 13)
+        ) 
+    }
+  })
+  
+  
+  
+  
+  
 } ### END SERVER

@@ -183,39 +183,54 @@ write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
 ```
 
 
-### Transmission efficiency
 
-Here we'll find an average WNV transmission efficiency for each zipcode.
-*NOTE:* This may be replaced by another transmission raster in the future.
+### Temperature
+
+The mean daily temperature by zip code was extracted from the PRISM dataset using a Google Earth Engine script. This was exported as a CSV with variables for date ("imageID"), zip code ("GEOID10"), and daily mean temperate ("mean"). We'll simply read in a reformat the CSV to make the data easy for plotting in the Shiny.
 ```{r}
-## Read in data
-wnv_trans <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
+temp <- read_csv(here('data/temp/kern_tmean_GEE_output.csv'))
 
-## easier to transform vector than high-res raster
-kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
-  project(y = crs(wnv_trans))
+temp2 <- temp %>% 
+  ## extract date from PRISM image id
+  mutate(date = lubridate::ymd(imageID)) %>% 
+  dplyr::select(!imageID) %>% 
+  rename(tmean_c = mean) %>% 
+  mutate(tmean_f = (tmean_c*(9/5))+32,
+         .before = date)
 
-## find total average
-trans_kern <- global(wnv_trans, "mean", na.rm = T)
-trans_kern <- data.frame("trans_eff" = trans_kern[1,1], "zipcode" = "Kern")
-
-## find the mean value per zip
-trans_zonal <- terra::zonal(wnv_trans, kern_zips, fun = 'mean', na.rm = T)
-
-trans_zonal_zips <- trans_zonal %>% 
-  mutate(zipcode = kern_zips$GEOID10) %>% 
-  rename(trans_eff = Kern_transmission_raster_wgs84) %>% 
-  rbind(., trans_kern)
-
-write_csv(trans_zonal_zips, here('data/transmission_efficiency_zipcodes.csv'))
+write_csv(temp2, here('data/temp/kern_tmean_20180101_20230731.csv'))
 ```
+
 
 
 
 ### Trap data
 
 Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plots showing how the number of WNV positives found in traps across a zip code change by month/year.
-*NOTE:* A fuller data set is currently being wrangled and standardized for effort by Andy. Well be updated in future.
+
+Andy's new data:
+```{r}
+## Read in data
+infect <- read_csv(here('data/traps/wnvMIRPIR1500LagWeeks0.csv')) %>% 
+  janitor::clean_names()
+
+## Select variables of interest
+infect1 <- infect %>% 
+  dplyr::select(clust, date, mir_all, mir_spline_all, pool_size, num_pools) %>% 
+  rename(numPools_clust = num_pools)
+
+
+
+
+
+
+### abundance
+abund <- read_csv(here('data/traps/all1500LagWeeks0.csv'))
+```
+
+
+
+Old code:
 ```{r}
 ## Read in raw trap data
 traps <- vect(here('data/wnv_cases/WNV_full_4_23_CA.shp'))
@@ -279,6 +294,32 @@ ggplot(data = cases_zip_yr_mo, aes(x = year, y = cases))+
 ```
 
 
+### Transmission efficiency
+
+Here we'll find an average WNV transmission efficiency for each zipcode.
+*NOTE:* This may be replaced by R0 once the model is done.
+```{r}
+## Read in data
+wnv_trans <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
+
+## easier to transform vector than high-res raster
+kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
+  project(y = crs(wnv_trans))
+
+## find total average
+trans_kern <- global(wnv_trans, "mean", na.rm = T)
+trans_kern <- data.frame("trans_eff" = trans_kern[1,1], "zipcode" = "Kern")
+
+## find the mean value per zip
+trans_zonal <- terra::zonal(wnv_trans, kern_zips, fun = 'mean', na.rm = T)
+
+trans_zonal_zips <- trans_zonal %>% 
+  mutate(zipcode = kern_zips$GEOID10) %>% 
+  rename(trans_eff = Kern_transmission_raster_wgs84) %>% 
+  rbind(., trans_kern)
+
+write_csv(trans_zonal_zips, here('data/transmission_efficiency_zipcodes.csv'))
+```
 
 
 
@@ -288,22 +329,35 @@ ggplot(data = cases_zip_yr_mo, aes(x = year, y = cases))+
 
 Testing out water plot for shiny:
 ```{r}
-data <- read_csv(here('data/water/water_test_data.csv'))
+### ANIMATION?
+library(xts)
 
-user_input <- "93222"
+date<-seq(as.Date("2015-01-01"), as.Date("2015-01-10"), by="day")
+a<-xts(1:10,order.by=date)
+df = data.frame(Lat = rnorm(1)+10, Long = rnorm(1),Id=a)
+
+data_a<-data.frame(a)
+data_a1<-data_a %>%  
+  mutate("Lat" =as.numeric(df[1,1]),"Long"=as.numeric(df[2,1]),"Date"=rownames(data_a))
+```
+
+
+```{r}
+data <- read_csv(here('data/water/water_acre_zipcode.csv'))
+
+user_input <- "93311"
 
 data_filtered <- data %>% 
-  filter(zipcode == user_input) %>% 
-  mutate(date = mdy(date))
+  filter(zipcode == user_input)
 
 
-ggplot(data_filtered, aes(x = date, y = water_ha)) +
+ggplot(data_filtered, aes(x = date, y = water_acres)) +
   geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
   geom_line(size = 0.6, color = "dodgerblue4") +
   labs(y = "Surface water size (ha)",
        x = element_blank()) +
     ## customize axis with cont 'date' class data
-  scale_x_date(limits = as.Date(c('2023-05-07', '2023-06-25')),
+  scale_x_date(limits = as.Date(c('2023-03-13', '2023-06-25')),
                date_breaks = "1 week",
                date_labels = "%b %d") +
   theme_classic() +

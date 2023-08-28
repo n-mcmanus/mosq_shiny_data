@@ -202,12 +202,17 @@ wnv_trans <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
 kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
   project(y = crs(wnv_trans))
 
+## find total average
+trans_kern <- global(wnv_trans, "mean", na.rm = T)
+trans_kern <- data.frame("trans_eff" = trans_kern[1,1], "zipcode" = "Kern")
+
 ## find the mean value per zip
 trans_zonal <- terra::zonal(wnv_trans, kern_zips, fun = 'mean', na.rm = T)
 
 trans_zonal_zips <- trans_zonal %>% 
   mutate(zipcode = kern_zips$GEOID10) %>% 
-  rename(trans_eff = Kern_transmission_raster_wgs84)
+  rename(trans_eff = Kern_transmission_raster_wgs84) %>% 
+  rbind(., trans_kern)
 
 write_csv(trans_zonal_zips, here('data/transmission_efficiency_zipcodes.csv'))
 ```

@@ -8,7 +8,7 @@ library(leaflet)
 navbarPage(title = "WNV in Kern County", id = "nav",
            
            
-    ## TAB 1: WNV Interactive map       
+    ## TAB 1: WNV Interactive Map ----------------------------------------------  
     tabPanel("Interactive map",
              id = "tab1",
         div(class = "outer",
@@ -44,6 +44,8 @@ navbarPage(title = "WNV in Kern County", id = "nav",
               
               ## Temp plot
               htmlOutput("temp_header"),
+              uiOutput("temp_dateRange"),
+              p("During this time, X days were in optimal range"),
               plotOutput("temp_plot", height = 180),
               
               ## Standing water plot
@@ -106,7 +108,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     
     
     
-    ## TAB 3: STANDING WATER
+    ## TAB 3: STANDING WATER  --------------------------------------------------
     tabPanel("Standing water",
              value = "tab3",
              p("This is where we'll explore changes of standing water over time with graphs and/or animated GIFs.")
@@ -116,7 +118,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     
     
     
-    ## TAB 4: INFO
+    ## TAB 4: INFO -------------------------------------------------------------
     tabPanel(title = NULL, icon = icon("info-circle", "fa-1.5x"),
              value = "tab4",
              h3("West Nile Virus:"),

@@ -21,6 +21,7 @@ valley_sf <- st_read(here('data/central_valley/valley.shp'))
 
 ## Data frames
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
+temp_zip_df <- read_csv(here('data/temp/kern_tmean_20180101_20230731.csv'))
 trans_zip_df <- read_csv(here('data/transmission_efficiency_zipcodes.csv'))
 cases_kern_df <- read_csv(here('data/traps/wnv_kern.csv'))
 
@@ -114,13 +115,6 @@ function(input, output, session) {
   # })
   
   
-  ## Filter water data based on zip input
-  water_zip <- reactive({
-    water_filtered <- water_zip_df %>% 
-      filter(zipcode == zipcode_d()) 
-    
-    return(water_filtered)
-  })    
   
   
   ## Return mean transmission risk based on zip input
@@ -143,6 +137,7 @@ function(input, output, session) {
   
   ### PANEL ELEMENTS -----------------------------------------------------------
   
+  #### R0 ---------------------------
   ## Transmission Risk header
   output$trans_header <- renderText({
     ## If invalid zip input, don't show text
@@ -168,7 +163,7 @@ function(input, output, session) {
   })
   
   
-  
+  #### Water ----------------------------
   ## Standing water header
   output$water_header <- renderText({
     if(!(zipcode_d() %in% zips_sf$GEOID10)) {
@@ -177,6 +172,14 @@ function(input, output, session) {
       paste("<h3>", "Standing water:", "</h3>")
     }
   })
+  
+  ## Filter water data based on zip input
+  water_zip <- reactive({
+    water_filtered <- water_zip_df %>% 
+      filter(zipcode == zipcode_d()) 
+    
+    return(water_filtered)
+  })   
   
   ## Standing water time series
   output$water_plot <- renderPlot({
@@ -201,50 +204,78 @@ function(input, output, session) {
    
   })
   
-  
+  #### Temp ---------------------
   ## Temp header
   output$temp_header <- renderText({
     ## If invalid zip, don't show text
     if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
     } else {
-      paste("<h3>", "Temperature Data:", "</h3>")
+      paste("<h3>", "Temperature:", "</h3>")
+    }
+  })
+  
+  ## Temp date range
+  output$temp_dateRange <- renderUI({
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+    dateRangeInput("temp_dateRange",
+                   label = 'Date range input:',
+                   start = "2023-01-01",
+                   end = "2023-07-31")
     }
   })
   
 
+  ## Filter water data based on zip input
+  temp_zip <- reactive({
+    temp_filtered <- temp_zip_df %>% 
+      filter(zipcode == zipcode_d(),
+             date >= input$temp_dateRange[1] & date <= input$temp_dateRange[2]) 
+    
+    return(temp_filtered)
+  })   
+  
+  ## Validation text below zip box
+  ivTemp <- InputValidator$new()
+  ### Must be 5 numbers
+  ivTemp$add_rule("temp_dateRange", function(start, end) {
+    start = input$temp_dateRange[1]
+    end = input$temp_dateRange[2]
+    if (end < start) {
+      "End date is earlier than start date."
+    }
+  })
+  ivTemp$enable()
+  
   ## Daily temp plot
-  # output$trap_plot <- renderPlot({
-  #   if (!(zipcode_d() %in% zips_sf$GEOID10)) {
-  #     return(NULL)
-  #   } else if (input$trap_time == "annual") {
-  #     ggplot(data = trap_data(), aes(x = Year, y = cases)) +
-  #       geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-  #       geom_line(linewidth = 0.6, color = "sienna4") +
-  #       labs(y = "Annual trapped cases",
-  #            x = "Year") +
-  #       theme_classic() +
-  #       theme(
-  #         # axis.title.x = element_text(face = "bold", vjust = -1),
-  #         axis.title.y = element_text(vjust = 2, size = 14),
-  #         axis.title.x = element_text(vjust = -1, size = 14),
-  #         axis.text = element_text(size = 13)
-  #       ) 
-  #   } else {
-  #     ggplot(data = trap_data(), aes(x = Year, y = cases)) +
-  #       geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-  #       geom_line(linewidth = 0.6, color = "sienna4") +
-  #       labs(y = "Monthly trapped cases",
-  #            x = "Year") +
-  #       theme_classic() +
-  #       theme(
-  #         # axis.title.x = element_text(face = "bold", vjust = -1),
-  #         axis.title.y = element_text(vjust = 2, size = 14),
-  #         axis.title.x = element_text(vjust = -1, size = 14),
-  #         axis.text = element_text(size = 13)
-  #       ) 
-  #   }
-  # })
+  output$temp_plot <- renderPlot({
+    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+      ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
+        geom_point(size = 3, 
+                   alpha = 0.6,
+                   aes(color = culex_range)) +
+        scale_color_manual(name = "",
+                           values = c("dodgerblue", "firebrick3"))+
+        geom_line(linewidth = 0.7) +
+        labs(y = "Mean daily temp (F)",
+             x = "Date") +
+        scale_x_date(date_labels = "%b %y") +
+        geom_hline(yintercept = 57.2, linetype = "dashed", color = "gray50")+
+        geom_hline(yintercept = 93.7, linetype = "dashed", color = "gray50")+
+        theme_classic() +
+        theme(
+          # axis.title.x = element_text(face = "bold", vjust = -1),
+          axis.title.y = element_text(vjust = 2, size = 14),
+          axis.title.x = element_text(vjust = -1, size = 14),
+          axis.text = element_text(size = 13),
+          legend.position = "none"
+        )
+    }
+  })
   
 
 

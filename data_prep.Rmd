@@ -186,7 +186,7 @@ write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
 
 ### Temperature
 
-The mean daily temperature by zip code was extracted from the PRISM dataset using a Google Earth Engine script. This was exported as a CSV with variables for date ("imageID"), zip code ("GEOID10"), and daily mean temperate ("mean"). We'll simply read in a reformat the CSV to make the data easy for plotting in the Shiny.
+The mean daily temperature by zip code was extracted from the PRISM dataset using a Google Earth Engine script. This was exported as a CSV with variables for date ("imageID"), zip code ("GEOID10"), and daily mean temperate ("mean"). We'll read in and clean up the CSV, as well as determine if each observation falls w/in the optimal range for *Culex* mosquitos. This is defined as between 14-34.3C (57.2-93.74F), with optimal temp 23.7C (74.7F).
 ```{r}
 temp <- read_csv(here('data/temp/kern_tmean_GEE_output.csv'))
 
@@ -194,11 +194,44 @@ temp2 <- temp %>%
   ## extract date from PRISM image id
   mutate(date = lubridate::ymd(imageID)) %>% 
   dplyr::select(!imageID) %>% 
-  rename(tmean_c = mean) %>% 
+  rename(tmean_c = mean,
+         zipcode = GEOID10) %>% 
   mutate(tmean_f = (tmean_c*(9/5))+32,
-         .before = date)
+         .before = date) %>% 
+  mutate(culex_range = case_when(tmean_c >= 14 & tmean_c <= 34.3 ~ "TRUE",
+                                .default = "FALSE"),
+         culex_optimal = case_when(tmean_c >= 22.7 & tmean_c <= 24.7 ~ "TRUE",
+                                   .default = "FALSE"))
 
 write_csv(temp2, here('data/temp/kern_tmean_20180101_20230731.csv'))
+
+
+temp3 <- temp2 %>% 
+  filter(GEOID10 == 93252,
+         date >= "2022-01-01" & date <= "2022-12-31")
+
+
+ggplot(data = temp3, aes(x = date, y = tmean_f)) +
+        geom_point(size = 3, 
+                   alpha = 0.6,
+                   aes(color = culex_range)) +
+        scale_color_manual(name = "",
+                           values = c("dodgerblue", "firebrick3"),
+                           labels = c("", "In range"))+
+        geom_line(linewidth = 0.7) +
+        labs(y = "Mean daily temperature (F)",
+             x = "Date") +
+        scale_x_date(date_labels = "%b %y") +
+        geom_hline(yintercept = 57.2, linetype = "dashed", color = "gray50")+
+        geom_hline(yintercept = 93.7, linetype = "dashed", color = "gray50")+
+        theme_classic() +
+        theme(
+          # axis.title.x = element_text(face = "bold", vjust = -1),
+          axis.title.y = element_text(vjust = 2, size = 14),
+          axis.title.x = element_text(vjust = -1, size = 14),
+          axis.text = element_text(size = 13),
+          legend.position = "none"
+        )
 ```
 
 

@@ -45,7 +45,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
               ## Temp plot
               htmlOutput("temp_header"),
               uiOutput("temp_dateRange"),
-              p("During this time, X days were in optimal range"),
+              htmlOutput("tempDays_text"),
               plotOutput("temp_plot", height = 180),
               
               ## Standing water plot

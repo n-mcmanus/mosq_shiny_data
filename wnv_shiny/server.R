@@ -21,9 +21,13 @@ valley_sf <- st_read(here('data/central_valley/valley.shp'))
 
 ## Data frames
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
-temp_zip_df <- read_csv(here('data/temp/kern_tmean_20180101_20230731.csv'))
 trans_zip_df <- read_csv(here('data/transmission_efficiency_zipcodes.csv'))
 cases_kern_df <- read_csv(here('data/traps/wnv_kern.csv'))
+temp_zip_df <- read_csv(here('data/temp/kern_tmean_20180101_20230731.csv')) %>% 
+  mutate(culex_range = factor(culex_range),
+         culex_range = fct_relevel(culex_range, levels = c("TRUE", "FALSE")),
+         culex_optimal = factor(culex_optimal),
+         culex_optimal = fct_relevel(culex_optimal, levels = c("TRUE", "FALSE")))
 
 ## Raster color palette
 pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
@@ -204,7 +208,7 @@ function(input, output, session) {
    
   })
   
-  #### Temp ---------------------
+  #### Temperature -------------------
   ## Temp header
   output$temp_header <- renderText({
     ## If invalid zip, don't show text
@@ -237,7 +241,7 @@ function(input, output, session) {
     return(temp_filtered)
   })   
   
-  ## Validation text below zip box
+  ## Validation text for temp date range
   ivTemp <- InputValidator$new()
   ### Must be 5 numbers
   ivTemp$add_rule("temp_dateRange", function(start, end) {
@@ -247,7 +251,24 @@ function(input, output, session) {
       "End date is earlier than start date."
     }
   })
+  ivTemp$add_rule("temp_dateRange", ~ if(difftime(input$temp_dateRange[2], input$temp_dateRange[1])<14)
+    "Date range less than 14 days")
   ivTemp$enable()
+  
+  ## Number of days in range
+  tempDays_int <- reactive({
+    days = sum(temp_zip()$culex_range == "TRUE")
+    return(days)
+  })
+  
+  output$tempDays_text <- renderText({
+    ## If invalid zip, don't show text
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+      paste("Within this time period, ", tempDays_int(), " days fell within the optimal temperature range for ", "<i>","Culex","</i>", " mosquitos.")
+    }
+  })
   
   ## Daily temp plot
   output$temp_plot <- renderPlot({
@@ -255,17 +276,23 @@ function(input, output, session) {
       return(NULL)
     } else {
       ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
+        geom_rect(xmin = -Inf, xmax = Inf, ymax = 93.7, ymin = 57.2,
+                  alpha = 0.05, fill = "gray85")+
         geom_point(size = 3, 
-                   alpha = 0.6,
+                   alpha = 0.7,
                    aes(color = culex_range)) +
         scale_color_manual(name = "",
-                           values = c("dodgerblue", "firebrick3"))+
+                           values = c("firebrick3", "dodgerblue"))+
         geom_line(linewidth = 0.7) +
         labs(y = "Mean daily temp (F)",
              x = "Date") +
         scale_x_date(date_labels = "%b %y") +
         geom_hline(yintercept = 57.2, linetype = "dashed", color = "gray50")+
         geom_hline(yintercept = 93.7, linetype = "dashed", color = "gray50")+
+        # annotate("text", y = 85, x = as.Date(temp_zip()$date[1]), 
+        #          hjust = 0,
+        #          label = "Optimal temperature range\nfor Culex mosq.",
+        #          fontface = "bold") +
         theme_classic() +
         theme(
           # axis.title.x = element_text(face = "bold", vjust = -1),

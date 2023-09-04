@@ -21,13 +21,11 @@ valley_sf <- st_read(here('data/central_valley/valley.shp'))
 
 ## Data frames
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
-trans_zip_df <- read_csv(here('data/transmission_efficiency_zipcodes.csv'))
+r0_zip_df <- read_csv(here('data/transmission_efficiency_zipcodes.csv'))
 cases_kern_df <- read_csv(here('data/traps/wnv_kern.csv'))
 temp_zip_df <- read_csv(here('data/temp/kern_tmean_20180101_20230731.csv')) %>% 
-  mutate(culex_range = factor(culex_range),
-         culex_range = fct_relevel(culex_range, levels = c("TRUE", "FALSE")),
-         culex_optimal = factor(culex_optimal),
-         culex_optimal = fct_relevel(culex_optimal, levels = c("TRUE", "FALSE")))
+  mutate(cxTar_opt = factor(cxTar_opt),
+         cxTar_opt = fct_relevel(cxTar_opt, levels = c("TRUE", "FALSE")))
 
 ## Raster color palette
 pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
@@ -37,10 +35,10 @@ pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
 
 
 
-### START SERVER
+# START SERVER
 function(input, output, session) {
   
-  ### WELCOME MODAL -----------------------------------------------------------
+  ## WELCOME MODAL -----------------------------------------------------------
   
   ## Initial modal on app launch
   shinyalert(
@@ -67,83 +65,51 @@ function(input, output, session) {
       updateNavbarPage(session, "nav", selected = "tab4")
     }
   })
+
+  ## TAB 1 - Interactive Map ##################################################
   
-  ### TAB 1 - Interactive Map ##################################################
+  ### PANEL ELEMENTS -----------------------------------------------------------
   
-  ### ZIP CODE INPUT ----------------------------------------------------
-  
+  #### Zip code ---------------------
   ## React to user input and slightly delay response
   zipcode <- reactive(input$zip_box)
   zipcode_d <- debounce(zipcode, millis = 1500)
   
   ## Validation text below zip box
   iv <- InputValidator$new()
-  ### Must be 5 numbers
-  iv$add_rule("zip_box", function(length) {
-    length = nchar(zipcode_d())
-    if (length !=5 & length != 0) {
-      "Only 5-character entries are permitted."
-    }
-  })
-  ### Must be zip in Kern
-  iv$add_rule("zip_box", function(zipcode_d) {
-    if (!(zipcode_d() %in% zips_sf$GEOID10) & nchar(zipcode_d()) != 0) {
-      "Please enter a valid zip code."
-    } 
-  })
+      ### Must be 5 numbers
+      iv$add_rule("zip_box", function(length) {
+        length = nchar(zipcode_d())
+        if (length !=5 & length != 0) {
+          "Only 5-character entries are permitted."
+        }
+      })
+      ### Must be zip in Kern
+      iv$add_rule("zip_box", function(zipcode_d) {
+        if (!(zipcode_d() %in% zips_sf$GEOID10) & nchar(zipcode_d()) != 0) {
+          "Please enter a valid zip code."
+        } 
+      })
   iv$enable()
   
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  ## Return error if user submits a number
-  ## with length other than 5 or 0 (e.g. no entry)
-  # observeEvent(zipcode_d(), {
-  #   if (nchar(zipcode_d()) != 5 & nchar(zipcode_d()) != 0)
-  #   {
-  #     updateTextInput(session, 'zip_box', value = NA)
-  #     showModal(modalDialog(
-  #         title = "Error!",
-  #         "Only 5-character entries are permitted.",
-  #         easyClose = TRUE)
-  #     )
-  #   }
-  # })
-  
-  
-  
-  
+  #### R0 ---------------------------
   ## Return mean transmission risk based on zip input
-  trans_zip <- reactive({
-    trans_filtered <- trans_zip_df %>% 
+  r0_zip <- reactive({
+    r0_filtered <- r0_zip_df %>% 
       filter(zipcode == zipcode_d())
-    
     ## return only transmission value
-    trans_mean <- round(trans_filtered$trans_eff,3)
-    return(trans_mean)
+    r0_mean <- round(r0_filtered$trans_eff,3)
+    return(r0_mean)
   })
   
   ## Total avg transmission risk for Kern
-  trans_kern <- trans_zip_df %>% 
+  r0_kern <- r0_zip_df %>% 
     filter(zipcode == "Kern")
-    
-
   
   
-  
-  ### PANEL ELEMENTS -----------------------------------------------------------
-  
-  #### R0 ---------------------------
-  ## Transmission Risk header
-  output$trans_header <- renderText({
+  ## R0 header
+  output$r0_header <- renderText({
     ## If invalid zip input, don't show text
     if (!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
@@ -152,17 +118,152 @@ function(input, output, session) {
     }
   })
   
-  ## Reactive transmission text
-  output$zip_risk <- renderText({
+  ## Reactive R0 text
+  output$r0_value <- renderText({
     ## If invalid zip input, don't show text
     if(!(zipcode_d() %in% zips_sf$GEOID10)) {
       return(NULL)
       ## If there is no trans data for zipcode
-    } else if (is.na(trans_zip())) {
-      paste0("The average R",'<sub>', '0','</sub>', " across Kern County is: ","<b>",round(trans_kern[1,1],3),"</b>", "<br>", "<br>", "No transmission data are available for the selected zip code.")
+    } else if (is.na(r0_zip())) {
+      paste0("The average R",'<sub>', '0','</sub>', " across Kern County is: ","<b>",round(r0_kern[1,1],3),"</b>", "<br>", "No transmission data are available for the selected zip code.")
     } else {
       ## Text for valid zips
-      paste("The average R",'<sub>', '0','</sub>', " across Kern County is: ", "<b>",round(trans_kern[1,1],3),"</b>", "<br>", "<br>", 'The average R','<sub>', '0','</sub>', ' within zip code ', zipcode_d(), "is: ", "<b>",trans_zip(),"</b>")
+      paste("The average R",'<sub>', '0','</sub>', " across Kern County is: ", "<b>",round(r0_kern[1,1],3),"</b>", "<br>", 'The average R','<sub>', '0','</sub>', ' within zip code ', zipcode_d(), "is: ", "<b>",r0_zip(),"</b>")
+    }
+  })
+  
+  ## Line
+  output$r0_line <- renderUI({
+    ## If invalid zip input, don't show text
+    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+      hr(style = 'border-top: 1.5px solid #2d3e50')
+    }
+  })
+  
+  
+  #### Temperature -------------------
+  ## Temp header
+  output$temp_header <- renderText({
+    ## If invalid zip, don't show text
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+      paste("<h3>", "Temperature:", "</h3>")
+    }
+  })
+  
+  ## Temp date range
+  output$temp_dateRange <- renderUI({
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+      dateRangeInput("temp_dateRange",
+                     label = NULL,
+                     start = "2023-01-01",
+                     end = "2023-07-31")
+    }
+  })
+  
+  ## Filter temp data based on zip input
+  temp_zip <- reactive({
+    temp_filtered <- temp_zip_df %>% 
+      filter(zipcode == zipcode_d(),
+             date >= input$temp_dateRange[1] & date <= input$temp_dateRange[2]) 
+    
+    return(temp_filtered)
+  })   
+  
+  ## Validation text for temp date range
+  ivTemp <- InputValidator$new()
+      ### Proper end date
+      ivTemp$add_rule("temp_dateRange", function(start, end) {
+        start = input$temp_dateRange[1]
+        end = input$temp_dateRange[2]
+        if (end < start) {
+          "End date is earlier than start date."
+        }
+      })
+      ### Dates w/in data range
+      ivTemp$add_rule("temp_dateRange", 
+                      ~ if(input$temp_dateRange[1] < "2018-01-01") 
+                        "Start date must be after 2018-01-01.")
+      ivTemp$add_rule("temp_dateRange", 
+                      ~ if(input$temp_dateRange[2] > "2023-07-31") 
+                        "End date must be before 2023-07-31.")
+      ### Range of 2+ weeks
+      ivTemp$add_rule("temp_dateRange", 
+                      ~ if(difftime(input$temp_dateRange[2],
+                                    input$temp_dateRange[1])<14)
+                        "Date range less than 14 days")
+  ivTemp$enable()
+  
+  ## Number of days (and percentage) in range
+  tempDays_int <- reactive({
+    days = sum(temp_zip()$cxTar_opt == "TRUE")
+    
+    return(days)
+  })
+  
+  ## Percent of days in range
+  tempDays_per <- reactive({
+    percent = round((tempDays_int()/(nrow(temp_zip())))*100, 2)
+    
+    return(percent)
+  })
+  
+  output$tempDays_text <- renderText({
+    ## If invalid zip, don't show text
+    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+      paste0("In this time period, ", "<b>",tempDays_int(), " days ","</b>",  "(", tempDays_per(), "%)",  " fell within the optimal temperature range for WNV transmission by ", "<i>","Culex tarsalis","</i>", " mosquitos.")
+    }
+  })
+  
+  ## Daily temp plot
+  output$temp_plot <- renderPlot({
+    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+      ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
+        geom_rect(xmin = -Inf, xmax = Inf, ymax = 78.6, ymin = 73.2,
+                  alpha = 0.05, fill = "gray85")+
+        geom_point(size = 3, 
+                   alpha = 0.7,
+                   aes(color = cxTar_opt)) +
+        scale_color_manual(name = "",
+                           values = c("firebrick2", "dodgerblue"))+
+        geom_line(linewidth = 0.7) +
+        labs(y = "Mean daily temp (F)",
+             x = "Date") +
+        scale_x_date(date_labels = "%b %y") +
+        geom_hline(yintercept = 73.2, linetype = "dashed", color = "gray50")+
+        geom_hline(yintercept = 78.6, linetype = "dashed", color = "gray50")+
+        # annotate("text", y = 74, x = as.Date(temp_zip()$date[1]),
+        #          hjust = 0,
+        #          label = "Optimal range for\nWNV transmission",
+        #          size = 3,
+        #          fontface = "bold") +
+        theme_classic() +
+        theme(
+          # axis.title.x = element_text(face = "bold", vjust = -1),
+          axis.title.y = element_text(vjust = 2, size = 14),
+          axis.title.x = element_text(vjust = -1, size = 14),
+          axis.text = element_text(size = 13),
+          legend.position = "none"
+        )
+    }
+  })
+  
+  ## Line
+  output$temp_line <- renderUI({
+    ## If invalid zip input, don't show text
+    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+      return(NULL)
+    } else {
+      hr(style = 'border-top: 1.5px solid #2d3e50')
     }
   })
   
@@ -208,102 +309,6 @@ function(input, output, session) {
    
   })
   
-  #### Temperature -------------------
-  ## Temp header
-  output$temp_header <- renderText({
-    ## If invalid zip, don't show text
-    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
-      return(NULL)
-    } else {
-      paste("<h3>", "Temperature:", "</h3>")
-    }
-  })
-  
-  ## Temp date range
-  output$temp_dateRange <- renderUI({
-    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
-      return(NULL)
-    } else {
-    dateRangeInput("temp_dateRange",
-                   label = 'Date range input:',
-                   start = "2023-01-01",
-                   end = "2023-07-31")
-    }
-  })
-  
-
-  ## Filter water data based on zip input
-  temp_zip <- reactive({
-    temp_filtered <- temp_zip_df %>% 
-      filter(zipcode == zipcode_d(),
-             date >= input$temp_dateRange[1] & date <= input$temp_dateRange[2]) 
-    
-    return(temp_filtered)
-  })   
-  
-  ## Validation text for temp date range
-  ivTemp <- InputValidator$new()
-  ### Must be 5 numbers
-  ivTemp$add_rule("temp_dateRange", function(start, end) {
-    start = input$temp_dateRange[1]
-    end = input$temp_dateRange[2]
-    if (end < start) {
-      "End date is earlier than start date."
-    }
-  })
-  ivTemp$add_rule("temp_dateRange", ~ if(difftime(input$temp_dateRange[2], input$temp_dateRange[1])<14)
-    "Date range less than 14 days")
-  ivTemp$enable()
-  
-  ## Number of days in range
-  tempDays_int <- reactive({
-    days = sum(temp_zip()$culex_range == "TRUE")
-    return(days)
-  })
-  
-  output$tempDays_text <- renderText({
-    ## If invalid zip, don't show text
-    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
-      return(NULL)
-    } else {
-      paste("Within this time period, ", tempDays_int(), " days fell within the optimal temperature range for ", "<i>","Culex","</i>", " mosquitos.")
-    }
-  })
-  
-  ## Daily temp plot
-  output$temp_plot <- renderPlot({
-    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
-      return(NULL)
-    } else {
-      ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
-        geom_rect(xmin = -Inf, xmax = Inf, ymax = 93.7, ymin = 57.2,
-                  alpha = 0.05, fill = "gray85")+
-        geom_point(size = 3, 
-                   alpha = 0.7,
-                   aes(color = culex_range)) +
-        scale_color_manual(name = "",
-                           values = c("firebrick3", "dodgerblue"))+
-        geom_line(linewidth = 0.7) +
-        labs(y = "Mean daily temp (F)",
-             x = "Date") +
-        scale_x_date(date_labels = "%b %y") +
-        geom_hline(yintercept = 57.2, linetype = "dashed", color = "gray50")+
-        geom_hline(yintercept = 93.7, linetype = "dashed", color = "gray50")+
-        # annotate("text", y = 85, x = as.Date(temp_zip()$date[1]), 
-        #          hjust = 0,
-        #          label = "Optimal temperature range\nfor Culex mosq.",
-        #          fontface = "bold") +
-        theme_classic() +
-        theme(
-          # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.title.x = element_text(vjust = -1, size = 14),
-          axis.text = element_text(size = 13),
-          legend.position = "none"
-        )
-    }
-  })
-  
 
 
   
@@ -316,17 +321,16 @@ function(input, output, session) {
       addTiles(group = "OpenStreetMaps") %>% 
       addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
       
-      ## Add rasters -------------------------------
-      ### Transmission efficiency
+      #### Add rasters -------------------------------
+      ## Transmission efficiency
       addRasterImage(wnv_trans, colors = pal, 
                      project = FALSE, group = "R0") %>%
-      
-      # ### Standing water
+      # ## Standing water
       # addRasterImage(water, colors = 'dodgerblue4',
       #                project = FALSE, group = "Standing Water") %>%
       
-      ## Add vectors ---------------------------------
-      ### Zip codes
+      #### Add vectors ---------------------------------
+      ## Zip codes
       addPolygons(data = zips_sf, color = "#343434",
                   weight = 2, fillOpacity = 0.2,
                   label = paste0("Zip code: ", zips_sf$GEOID10),
@@ -337,17 +341,17 @@ function(input, output, session) {
                   group = "Zip codes",
                   layerId = ~GEOID10) %>%  
     
-      ### Kern county
+      ## Kern county
       addPolylines(data = kern_sf,
                    color = 'black', weight = 4, fillOpacity = 0,
                    group = "Kern county") %>% 
-      
-      ### Central valley
+    
+      ## Central valley
       addPolylines(data = valley_sf,
                    color = 'blue', weight = 3, fillOpacity = 0,
                    group = "Central Valley") %>% 
       
-      ## Create map groups -----------------------------
+      #### Create map groups -----------------------------
       addLayersControl(
         baseGroups = c("OpenStreetMaps", "World Imagery"),
         overlayGroups = c("R0", "Standing Water", "Zip codes", "Kern county", "Central Valley"),
@@ -357,24 +361,24 @@ function(input, output, session) {
       ## Don't show all layers by default
       hideGroup(c("R0", "Standing Water", "Central Valley")) %>% 
       
-      ## Add map inset ---------------------------------
+      #### Add map inset ---------------------------------
       addMiniMap(
         tiles = providers$Esri.WorldStreetMap,
         zoomLevelOffset = -5,
         position = 'bottomleft',
         toggleDisplay = TRUE) %>% 
       
-      ## Add legend ------------------------------------
+      #### Add legend ------------------------------------
       # addLegend(pal = pal, values = values(wnv_trans),
       #           position = "topleft",
       #           title = "WNV Transmission </br> Efficiency") %>% 
       setView(-119.2, 35.38, zoom = 10)
   }) ## END LEAFLET
   
-  ### Interactive Leaflet elements: 
+  
+  #### Interactive Leaflet elements: --------------------
   
   ## Click on zip code polygon to input value in text box
-  ## and zoom to zip code
   observe({
     event <- input$map_shape_click
     if(is.null(event$id))
@@ -384,25 +388,32 @@ function(input, output, session) {
     updateTextInput(session, 
                     inputId = "zip_box", 
                     value = event$id)
-    
+  })
+
+  ## Zoom and highlight zip code
+  observe({
+
     ## establish zip code boundaries
     geom <- zips_sf %>%
-      dplyr::filter(GEOID10 == event$id)
+      dplyr::filter(GEOID10 == input$zip_box)
     bounds <- geom %>%
       st_bbox() %>%
       as.character()
-    
-    ## Zoom to zipcode
+
+    ## Update map
     leafletProxy("map") %>%
-      flyToBounds(lng1 = bounds[1], lat1 = bounds[2], lng2 = bounds[3], lat2 = bounds[4])
+      clearGroup("highlighted_polygon") %>%
+      ## zoom to zip
+      flyToBounds(lng1 = bounds[1], lat1 = bounds[2],
+                  lng2 = bounds[3], lat2 = bounds[4]) %>%
+      ## highlight selected zip
+      addPolylines(stroke=TRUE, weight = 5,color="yellow",
+                   data = geom, group = "highlighted_polygon")
   })
 
+  ## TAB 2 - Trap Data ##########################################################
   
-  
-  
-  ### TAB 2 - Trap Data ##########################################################
-  
-  ### RESPONSIVE SIDE PANEL WIDGETS ------------------------------------------
+  ## RESPONSIVE SIDE PANEL WIDGETS --------------------
   
   ## Zip code box
     ## React to user input and slightly delay response
@@ -429,7 +440,7 @@ function(input, output, session) {
 
   ## Trap month box
   output$trapMonth <- renderUI({
-    if (input$trapAnnual != "monthly") {
+    if (input$trapTime != "monthly") {
       return(NULL)
     } else {
       selectInput("trapMonth", label = "Select month:",
@@ -448,10 +459,13 @@ function(input, output, session) {
   
   ## Custom date range
   output$trapDates <- renderUI({
-    if (input$trapAnnual != "custom") {
+    if (input$trapTime != "custom") {
       return(NULL)
     } else {
-      dateRangeInput("trapDates", label = "Date range:")
+      dateRangeInput("trapDates", 
+                     label = "Date range:",
+                     start = "2023-01-01",
+                     end = "2023-07-31")
     }
   })
   
@@ -534,21 +548,37 @@ function(input, output, session) {
   ## Filter trap data by user input
   trap_data <- reactive ({
     
-    month_selected <- input$trapMonth
-    
-    x <- if(input$trap_time == "annual") {
+    if(input$trapTime == "annual") {
       filtered_year <- cases_kern_df %>% 
         filter(GEOID10 == zipcodeTrap_d()) %>% 
         group_by(Year) %>% 
         summarize(cases = sum(Count))
-    } else {
+    } else if (input$trapTime == "monthly") {
       filtered_month <- cases_kern_df %>% 
         filter(GEOID10 == zipcodeTrap_d(),
-               Month == month_selected) %>% 
+               Month == input$trapMonth) %>% 
         group_by(Year) %>% 
         summarize(cases = sum(Count))
     }
-    return(x)
+    # } else {
+    #   filtered_custom <- cases_kern_df %>% 
+    #     filter(GEOID10 == zipcodeTrap_d(),
+    #            date >= input$temp_dateRange[1] & date <= input$temp_dateRange[2])
+    # } 
+  })
+  
+ 
+   trap_data_county <- reactive ({
+    if(input$trapTime == "annual") {
+      filtered_year <- cases_kern_df %>%
+        group_by(Year) %>% 
+        summarize(cases = sum(Count))
+    } else if (input$trapTime == "monthly") {
+      filtered_month <- cases_kern_df %>% 
+        filter(Month == input$trapMonth) %>% 
+        group_by(Year) %>% 
+        summarize(cases = sum(Count))
+    }
   })
   
   
@@ -559,10 +589,22 @@ function(input, output, session) {
   output$trap_plot <- renderPlot({
     if (!(zipcodeTrap_d() %in% zips_sf$GEOID10)) {
       return(NULL)
-    } else if (input$trap_time == "annual") {
-      ggplot(data = trap_data(), aes(x = Year, y = cases)) +
-        geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-        geom_line(linewidth = 0.6, color = "sienna4") +
+    } else if (input$trapTime == "annual") {
+      ggplot() +
+        ## By zip code
+        geom_point(data = trap_data(), 
+                   aes(x = Year, y = cases),
+                   color = "sienna2", size = 3, alpha = 0.6) +
+        geom_line(data = trap_data(), 
+                  aes(x = Year, y = cases),
+                  linewidth = 0.6, color = "sienna4") +
+        ## All county
+        geom_point(data = trap_data_county(),
+                   aes(x = Year, y = cases),
+                   color = "forestgreen", size = 3, alpha = 0.6) +
+        geom_line(data = trap_data_county(),
+                  aes(x = Year, y = cases),
+                  linewidth = 0.6, color = "darkgreen") +
         labs(y = "Annual trapped cases",
              x = "Year") +
         theme_classic() +

@@ -29,29 +29,28 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                           top = 60, left = "auto", right = 20, bottom = "auto",
                           width = 350, height = "auto",
               
-              # h2("Title here"),
-              
-              ## User inputs zipcode
+              ## Zip code
               textInput(inputId = "zip_box", label = h3("Zip code:"),
                         value = NULL,
                         placeholder = "Enter your zip code..."
                         ),
+              hr(style = 'border-top: 1.5px solid #2d3e50'),
               
               ## Transmission risk text
-              htmlOutput("trans_header"),
-              htmlOutput("zip_risk"),
-              br(),
+              htmlOutput("r0_header"),
+              htmlOutput("r0_value"),
+              htmlOutput("r0_line"),
               
               ## Temp plot
               htmlOutput("temp_header"),
               uiOutput("temp_dateRange"),
               htmlOutput("tempDays_text"),
               plotOutput("temp_plot", height = 180),
+              htmlOutput("temp_line"),
               
               ## Standing water plot
               htmlOutput("water_header"),
-              plotOutput("water_plot", height = 180),
-              br()
+              plotOutput("water_plot", height = 170)
               
               
         ) ## End panel
@@ -64,7 +63,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     ## TAB 2: WNV TRAP CASES ---------------------------------------------------
     tabPanel("Trap cases",
              value = "tab2",
-             h2("Mosquito and WNV Abundance"),
+             h2("Mosquito Abundance and WNV"),
              p("This is some more info and copy about the data. Such as: Mosquito abundance and WNV data comes from trapping efforts by the Kern County Vector Control Board. Stuff about methodology: Traps are layed out and checked every 1-X days. These pools of mosquitos are then tested for WNV. To standardize for monitoring effort, abundance and WNV cases have been standardized to cases per night."),
              p("You can view information by zip code either by entering the zip code of interest on the left-hand panel, or by clicking on the zip code within the map on the right."),
              ### Side Panel: 
@@ -80,12 +79,12 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                radioButtons("trapRadio", label = h4("Metric:"),
                             inline = TRUE,
                             choices = c("Abundance" = "abundance",
-                                        "WNV positive" = "wnv")),
+                                        "WNV cases" = "wnv")),
                br(),
                ### Time period:
                h4("Time period:"),
                fluidRow(   ## put both input boxes in-line
-                 column(width = 6, selectInput("trapAnnual", label = "Select timeframe:",
+                 column(width = 6, selectInput("trapTime", label = "Select timeframe:",
                                                choices = list("Annual" = "annual",
                                                               "Monthly" = "monthly",
                                                               "Custom" = "custom"),
@@ -99,6 +98,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
              mainPanel(
                leafletOutput("trapMap", height = "400px"),
                htmlOutput("trapMap_caption"),
+               br(),
                plotOutput("trap_plot"))
              
              

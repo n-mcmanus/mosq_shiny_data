@@ -28,7 +28,7 @@ In this section, we'll crop and reproject spatial data as well as find zonal sta
 
 We want to find and save the zip codes located within the Central Valley portion of Kern county. This .shp will then be exported for use in the Shiny app.
 
-*Note*: For the purposes of this app, the extent of zip codes will be cropped to only portions within both Kern county and the Central Valley. To keep the entire geometry of zips that are within Kern, see the commented out code chunk below. 
+*Note*: For the purposes of this app, the extent of zip codes will be cropped to only portions within both Kern county and the Central Valley. To remove artifacts of zip code portions that only slightly intersect with Kern, we'll also remove any zip code with an area below 1,000,000 m^2. To keep the entire geometry of zips that are within Kern, see the commented out code chunk below. 
 ```{r}
 ## Read in data w/ 'sf' pkg (easier to filter by attribute).
 ## After filtering, make SpatVect obj (`terra` pkg)
@@ -47,14 +47,22 @@ valley <- st_read(here('data/central_valley/Alluvial_Bnd.shp')) %>%
 
 zips <- st_read(here('data/zipcodes/CA_Zips.shp')) %>% 
   st_transform(crs = st_crs(kern)) %>% 
-  ## only keep zipcodes
-  dplyr::select(GEOID10) %>% 
   vect() %>% 
-  terra::intersect(valley)
+  terra::intersect(valley) %>% 
+  st_as_sf() %>% 
+  dplyr::select(GEOID10) %>% 
+  rename(zipcode = GEOID10) %>% 
+  ## best crs for calculating area(?)
+  st_transform(crs = "epsg:3310")
 
+## find area and remove small cropped zips
+zips_filter <- zips %>% 
+  mutate(area_m2 = as.numeric(st_area(zips))) %>% 
+  filter(area_m2 >= 1000000) %>% 
+  vect()
 
 ## ensure CRS is leaflet friendly
-kern_zips <- terra::project(zips, "+proj=longlat +datum=WGS84")
+kern_zips <- terra::project(zips_filter, "+proj=longlat +datum=WGS84")
 
 ## Save clipped zips
 writeVector(kern_zips, here('data/zipcodes/kern_zips.shp'), overwrite = T)
@@ -164,7 +172,7 @@ waterStats <- function(rast35, mask35, rast36, mask36, zip_vect, dates) {
   
   zonalStat_df <- zonalStat %>%
     ## assign values with corresponding zipcode
-    mutate(zipcode = zip_vect$GEOID10, .before = 1) %>%
+    mutate(zipcode = zip_vect$zipcode, .before = 1) %>%
     ## convert values from # of pixels to acres
     ## w/30m resolution, each pixel is 900 m^2
     ## 4046.86 m^2 are in one acre
@@ -254,6 +262,20 @@ ggplot(data = temp3, aes(x = date, y = tmean_f)) +
 
 Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plots showing how the number of WNV positives found in traps across a zip code change by month/year.
 
+Because trap data is aggregated and assigned to clusters, we'll first need to assign each cluster to a zip code. 
+```{r}
+clust <- read_sf(here("data/traps/shp_files/clusterPolys.shp"))
+
+zips <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
+  st_transform(crs = crs(clust))
+
+clust_zips <- st_centroid(clust) %>% 
+  st_join(zips)
+
+zips$area <- st_area(zips)
+```
+
+
 Andy's new data:
 ```{r}
 ## Read in data
@@ -304,7 +326,7 @@ cases_kern <- read_csv(here('data/wnv_cases/wnv_kern.csv')) %>%
   janitor::clean_names()
 
 cases_zip_yr <- cases_kern %>% 
-  filter(geoid10 == 93203) %>% 
+  filter(zipcode == 93203) %>% 
   group_by(year) %>% 
   summarize(cases = sum(count))
 
@@ -322,7 +344,7 @@ ggplot(data = cases_zip_yr, aes(x = year, y = cases))+
 
 cases_zip_yr_mo <- cases_kern %>% 
     ## user input ex
-  filter(geoid10 == 93252) %>% 
+  filter(zipcode == 93252) %>% 
   filter(month == "Aug") %>% 
   group_by(year) %>% 
   summarize(cases = sum(count)) 
@@ -360,7 +382,7 @@ trans_kern <- data.frame("trans_eff" = trans_kern[1,1], "zipcode" = "Kern")
 trans_zonal <- terra::zonal(wnv_trans, kern_zips, fun = 'mean', na.rm = T)
 
 trans_zonal_zips <- trans_zonal %>% 
-  mutate(zipcode = kern_zips$GEOID10) %>% 
+  mutate(zipcode = kern_zips$zipcode) %>% 
   rename(trans_eff = Kern_transmission_raster_wgs84) %>% 
   rbind(., trans_kern)
 
@@ -450,7 +472,7 @@ leaflet() %>%
   ## Add polygons
   addPolygons(data = zips, color = "#343434", 
               weight = 2, fillOpacity = 0.2,
-              label = paste0("Zip code: ", zips$GEOID10),
+              label = paste0("Zip code: ", zips$zipcode),
               group = "Zip codes",
               highlightOptions = highlightOptions(weight = 5,
                                                color = "white",

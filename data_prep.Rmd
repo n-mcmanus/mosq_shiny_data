@@ -142,7 +142,6 @@ r <- rast(paste0(path35, waterInput_df[1,1]))
 kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>%
   project(y = crs(r))
 
-
 ## Function to perform zonal stats and output results
 waterStats <- function(rast35, mask35, rast36, mask36, zip_vect, dates) {
   

@@ -86,7 +86,7 @@ function(input, output, session) {
       })
       ### Must be zip in Kern
       iv$add_rule("zip_box", function(zipcode_d) {
-        if (!(zipcode_d() %in% zips_sf$GEOID10) & nchar(zipcode_d()) != 0) {
+        if (!(zipcode_d() %in% zips_sf$zipcode) & nchar(zipcode_d()) != 0) {
           "Please enter a valid zip code."
         } 
       })
@@ -111,7 +111,7 @@ function(input, output, session) {
   ## R0 header
   output$r0_header <- renderText({
     ## If invalid zip input, don't show text
-    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if (!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       paste0("<h3>", "Transmission (R",'<sub>', '0','</sub>', "):", "</h3>")
@@ -121,7 +121,7 @@ function(input, output, session) {
   ## Reactive R0 text
   output$r0_value <- renderText({
     ## If invalid zip input, don't show text
-    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
       ## If there is no trans data for zipcode
     } else if (is.na(r0_zip())) {
@@ -135,7 +135,7 @@ function(input, output, session) {
   ## Line
   output$r0_line <- renderUI({
     ## If invalid zip input, don't show text
-    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if (!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       hr(style = 'border-top: 1.5px solid #2d3e50')
@@ -147,7 +147,7 @@ function(input, output, session) {
   ## Temp header
   output$temp_header <- renderText({
     ## If invalid zip, don't show text
-    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       paste("<h3>", "Temperature:", "</h3>")
@@ -156,7 +156,7 @@ function(input, output, session) {
   
   ## Temp date range
   output$temp_dateRange <- renderUI({
-    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       dateRangeInput("temp_dateRange",
@@ -215,7 +215,7 @@ function(input, output, session) {
   
   output$tempDays_text <- renderText({
     ## If invalid zip, don't show text
-    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       paste0("In this time period, ", "<b>",tempDays_int(), " days ","</b>",  "(", tempDays_per(), "%)",  " fell within the optimal temperature range for WNV transmission by ", "<i>","Culex tarsalis","</i>", " mosquitos.")
@@ -224,7 +224,7 @@ function(input, output, session) {
   
   ## Daily temp plot
   output$temp_plot <- renderPlot({
-    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if (!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
@@ -260,7 +260,7 @@ function(input, output, session) {
   ## Line
   output$temp_line <- renderUI({
     ## If invalid zip input, don't show text
-    if (!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if (!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       hr(style = 'border-top: 1.5px solid #2d3e50')
@@ -271,7 +271,7 @@ function(input, output, session) {
   #### Water ----------------------------
   ## Standing water header
   output$water_header <- renderText({
-    if(!(zipcode_d() %in% zips_sf$GEOID10)) {
+    if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       paste("<h3>", "Standing water:", "</h3>")
@@ -288,7 +288,7 @@ function(input, output, session) {
   
   ## Standing water time series
   output$water_plot <- renderPlot({
-   if (!(zipcode_d() %in% zips_sf$GEOID10))
+   if (!(zipcode_d() %in% zips_sf$zipcode))
      return(NULL)
      
     ggplot(data = water_zip(), aes(x = date, y = water_acres)) +
@@ -332,14 +332,14 @@ function(input, output, session) {
       #### Add vectors ---------------------------------
       ## Zip codes
       addPolygons(data = zips_sf, color = "#343434",
-                  weight = 2, fillOpacity = 0.2,
-                  label = paste0("Zip code: ", zips_sf$GEOID10),
+                  weight = 2, fillOpacity = 0.1,
+                  label = paste0("Zip code: ", zips_sf$zipcode),
                   labelOptions = labelOptions(textsize = "11px"),
                   highlight = highlightOptions(weight = 5,
                                                color = "white",
                                                bringToFront = TRUE),
                   group = "Zip codes",
-                  layerId = ~GEOID10) %>%  
+                  layerId = ~zipcode) %>%  
     
       ## Kern county
       addPolylines(data = kern_sf,
@@ -395,7 +395,7 @@ function(input, output, session) {
 
     ## establish zip code boundaries
     geom <- zips_sf %>%
-      dplyr::filter(GEOID10 == input$zip_box)
+      dplyr::filter(zipcode == input$zip_box)
     bounds <- geom %>%
       st_bbox() %>%
       as.character()
@@ -407,7 +407,8 @@ function(input, output, session) {
       flyToBounds(lng1 = bounds[1], lat1 = bounds[2],
                   lng2 = bounds[3], lat2 = bounds[4]) %>%
       ## highlight selected zip
-      addPolylines(stroke=TRUE, weight = 5,color="yellow",
+      addPolylines(stroke=TRUE, weight = 5, color="yellow",
+                   fill = TRUE, fillColor = "white", fillOpacity = 0.4,
                    data = geom, group = "highlighted_polygon")
   })
 
@@ -415,7 +416,7 @@ function(input, output, session) {
   
   ## RESPONSIVE SIDE PANEL WIDGETS --------------------
   
-  ## Zip code box
+  ### Zip code box ----------------
     ## React to user input and slightly delay response
     zipcodeTrap <- reactive(input$zip_box_trap)
     zipcodeTrap_d <- debounce(zipcodeTrap, millis = 1500)
@@ -431,13 +432,14 @@ function(input, output, session) {
     })
     ### Must be zip in Kern
     ivTrap$add_rule("zip_box_trap", function(zipcodeTrap_d) {
-      if (!(zipcodeTrap_d() %in% zips_sf$GEOID10) & nchar(zipcodeTrap_d()) != 0) {
+      if (!(zipcodeTrap_d() %in% zips_sf$zipcode) & nchar(zipcodeTrap_d()) != 0) {
         "Please enter a valid zip code."
       } 
     })
     ivTrap$enable()
   
 
+  ### Trap date selection ----------------
   ## Trap month box
   output$trapMonth <- renderUI({
     if (input$trapTime != "monthly") {
@@ -457,7 +459,7 @@ function(input, output, session) {
     }
   })
   
-  ## Custom date range
+  ### Custom date range
   output$trapDates <- renderUI({
     if (input$trapTime != "custom") {
       return(NULL)
@@ -469,7 +471,7 @@ function(input, output, session) {
     }
   })
   
-  ### TRAP MAP ------------------------------------------------------------
+  ## TRAP MAP ------------------------------------------------------------
   output$trapMap <- renderLeaflet({
     leaflet() %>% 
       ## Add background maps
@@ -478,14 +480,14 @@ function(input, output, session) {
   
       ### Zip codes
       addPolygons(data = zips_sf, color = "#343434",
-                  weight = 2, fillOpacity = 0.2,
-                  label = paste0("Zip code: ", zips_sf$GEOID10),
+                  weight = 2, fillOpacity = 0.1,
+                  label = paste0("Zip code: ", zips_sf$zipcode),
                   labelOptions = labelOptions(textsize = "11px"),
                   highlight = highlightOptions(weight = 5,
                                                color = "white",
                                                bringToFront = TRUE),
                   group = "Zip codes",
-                  layerId = ~GEOID10) %>%  
+                  layerId = ~zipcode) %>%  
         
         ### Kern county
         addPolylines(data = kern_sf,
@@ -514,7 +516,7 @@ function(input, output, session) {
           position = 'bottomright',
           toggleDisplay = TRUE) %>% 
           
-          ## Add legend ------------------------------------
+          ## Add legend 
         # addLegend(pal = pal, values = values(wnv_trans),
         #           position = "topleft",
         #           title = "WNV Transmission </br> Efficiency") %>% 
@@ -524,7 +526,6 @@ function(input, output, session) {
   
   ### Interactive Leaflet elements: 
   ## Click on zip code polygon to input value in text box
-  ## and zoom to zip code
   observe({
     event <- input$trapMap_shape_click
     if(is.null(event$id))
@@ -534,6 +535,27 @@ function(input, output, session) {
     updateTextInput(session, 
                     inputId = "zip_box_trap", 
                     value = event$id)
+  })
+  
+  ## Zoom and highlight zip code
+  observe({
+    ## establish zip code boundaries
+    geom <- zips_sf %>%
+      dplyr::filter(zipcode == input$zip_box_trap)
+    bounds <- geom %>%
+      st_bbox() %>%
+      as.character()
+    
+    ## Update map
+    leafletProxy("trapMap") %>%
+      clearGroup("highlighted_polygon") %>%
+      ## zoom to zip
+      flyToBounds(lng1 = bounds[1], lat1 = bounds[2],
+                  lng2 = bounds[3], lat2 = bounds[4]) %>%
+      ## highlight selected zip
+      addPolylines(stroke=TRUE, weight = 5, color="yellow",
+                   fill = TRUE, fillColor = "white", fillOpacity = 0.4,
+                   data = geom, group = "highlighted_polygon")
   })
   
   
@@ -550,19 +572,19 @@ function(input, output, session) {
     
     if(input$trapTime == "annual") {
       filtered_year <- cases_kern_df %>% 
-        filter(GEOID10 == zipcodeTrap_d()) %>% 
+        filter(zipcode == zipcodeTrap_d()) %>% 
         group_by(Year) %>% 
         summarize(cases = sum(Count))
     } else if (input$trapTime == "monthly") {
       filtered_month <- cases_kern_df %>% 
-        filter(GEOID10 == zipcodeTrap_d(),
+        filter(zipcode == zipcodeTrap_d(),
                Month == input$trapMonth) %>% 
         group_by(Year) %>% 
         summarize(cases = sum(Count))
     }
     # } else {
     #   filtered_custom <- cases_kern_df %>% 
-    #     filter(GEOID10 == zipcodeTrap_d(),
+    #     filter(zipcode == zipcodeTrap_d(),
     #            date >= input$temp_dateRange[1] & date <= input$temp_dateRange[2])
     # } 
   })
@@ -587,7 +609,7 @@ function(input, output, session) {
   
   ## Trap plot
   output$trap_plot <- renderPlot({
-    if (!(zipcodeTrap_d() %in% zips_sf$GEOID10)) {
+    if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else if (input$trapTime == "annual") {
       ggplot() +

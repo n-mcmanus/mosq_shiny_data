@@ -22,7 +22,8 @@ valley_sf <- st_read(here('data/central_valley/valley.shp'))
 ## Data frames
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
 r0_zip_df <- read_csv(here('data/transmission_efficiency_zipcodes.csv'))
-cases_kern_df <- read_csv(here('data/traps/wnv_kern.csv'))
+wnv_df <- read_csv(here('data/traps/wnvMIR_plotting.csv'))
+abund_df <- read_csv(here('data/traps/abundance_plotting.csv'))
 temp_zip_df <- read_csv(here('data/temp/kern_tmean_20180101_20230731.csv')) %>% 
   mutate(cxTar_opt = factor(cxTar_opt),
          cxTar_opt = fct_relevel(cxTar_opt, levels = c("TRUE", "FALSE")))
@@ -446,25 +447,25 @@ function(input, output, session) {
       return(NULL)
     } else {
       selectInput("trapMonth", label = "Select month:",
-                  choices = list("March" = "Mar",
-                                 "April" = "Apr",
-                                 "May" = "May",
-                                 "June" = "Jun",
-                                 "July" = "Jul",
-                                 "August" = "Aug",
-                                 "September" = "Sep",
-                                 "October" = "Oct",
-                                 "November" = "Nov"),
-                  selected = "Aug")
+                  choices = list("March" = 3,
+                                 "April" = 4,
+                                 "May" = 5,
+                                 "June" = 6,
+                                 "July" = 7,
+                                 "August" = 8,
+                                 "September" = 9,
+                                 "October" = 10,
+                                 "November" = 11),
+                  selected = 8)
     }
   })
   
   ### Custom date range
-  output$trapDates <- renderUI({
+  output$trap_dateRange <- renderUI({
     if (input$trapTime != "custom") {
       return(NULL)
     } else {
-      dateRangeInput("trapDates", 
+      dateRangeInput("trap_dateRange", 
                      label = "Date range:",
                      start = "2023-01-01",
                      end = "2023-07-31")
@@ -567,93 +568,152 @@ function(input, output, session) {
   
   
   ### FILTER TRAP DATA ----------------------------------------------------
-  ## Filter trap data by user input
-  trap_data <- reactive ({
-    
-    if(input$trapTime == "annual") {
-      filtered_year <- cases_kern_df %>% 
-        filter(zipcode == zipcodeTrap_d()) %>% 
-        group_by(Year) %>% 
-        summarize(cases = sum(Count))
+  ## Mosq abundance by zip
+    abund_data <- reactive ({
+      if (input$trapTime == "annual") {
+        filtered_year <- abund_df %>%
+          filter(zipcode == zipcodeTrap_d()) %>% 
+          group_by(year) %>% 
+          summarize(cases = sum(mos_per_trap_night, na.rm = TRUE))
+      } else if (input$trapTime == "monthly") {
+        filtered_month <- abund_df %>% 
+          filter(zipcode == zipcodeTrap_d(),
+                 month == input$trapMonth) %>% 
+          group_by(year) %>% 
+          summarize(cases = sum(mos_per_trap_night, na.rm = TRUE))
+      } else if (input$trapTime == "custom") {
+        filtered_custom <- abund_df %>% 
+          filter(zipcode == zipcodeTrap_d(),
+                 date >= input$trap_dateRange[1] & date <= input$trap_dateRange[2]) %>% 
+          group_by(date) %>% 
+          summarize(cases = sum(mos_per_trap_night, na.rm = TRUE))
+      }
+    })
+  
+  ## WNV MIR by zip
+   wnv_data <- reactive ({
+    if (input$trapTime == "annual") {
+      filtered_year <- wnv_df %>% 
+        filter(zipcode == zipcodeTrap_d()) %>%
+        group_by(year) %>% 
+        summarize(cases = sum(mir_spline_all, na.rm = TRUE))
     } else if (input$trapTime == "monthly") {
-      filtered_month <- cases_kern_df %>% 
+      filtered_month <- wnv_df %>% 
         filter(zipcode == zipcodeTrap_d(),
-               Month == input$trapMonth) %>% 
-        group_by(Year) %>% 
-        summarize(cases = sum(Count))
+               month == input$trapMonth) %>% 
+        group_by(year) %>% 
+        summarize(cases = sum(mir_spline_all, na.rm = TRUE))
+    } else if (input$trapTime == "custom") {
+      filtered_custom <- wnv_df %>% 
+        filter(zipcode == zipcodeTrap_d(),
+               date >= input$trap_dateRange[1] & date <= input$trap_dateRange[2]) %>% 
+        group_by(date) %>% 
+        summarize(cases = sum(mir_spline_all, na.rm = TRUE))
     }
-    # } else {
-    #   filtered_custom <- cases_kern_df %>% 
-    #     filter(zipcode == zipcodeTrap_d(),
-    #            date >= input$temp_dateRange[1] & date <= input$temp_dateRange[2])
-    # } 
   })
   
  
-   trap_data_county <- reactive ({
-    if(input$trapTime == "annual") {
-      filtered_year <- cases_kern_df %>%
-        group_by(Year) %>% 
-        summarize(cases = sum(Count))
-    } else if (input$trapTime == "monthly") {
-      filtered_month <- cases_kern_df %>% 
-        filter(Month == input$trapMonth) %>% 
-        group_by(Year) %>% 
-        summarize(cases = sum(Count))
-    }
-  })
+  ### PLOT TRAP DATA ----------------------------------------------------
+  ## Abundance plot
+   output$abund_plot <- renderPlot({
+     if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
+       return(NULL)
+     } else if (input$trapTime == "annual") {
+       ggplot(data = abund_data(), aes(x = year, y = cases)) +
+         ## By zip code
+         geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+         geom_line(color = "sienna4", linewidth = 0.6) +
+         labs(y = "Annual abundance",
+              x = "Year") +
+         theme_classic() +
+         theme(
+           # axis.title.x = element_text(face = "bold", vjust = -1),
+           axis.title.y = element_text(vjust = 2, size = 14),
+           axis.title.x = element_text(vjust = -1, size = 14),
+           axis.text = element_text(size = 13)
+         ) 
+     } else if (input$trapTime == "monthly") {
+       ggplot(data = abund_data(), aes(x = year, y = cases)) +
+         geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+         geom_line(color = "sienna4", linewidth = 0.6) +
+         labs(y = "Monthly abundance",
+              x = "Year") +
+         theme_classic() +
+         theme(
+           # axis.title.x = element_text(face = "bold", vjust = -1),
+           axis.title.y = element_text(vjust = 2, size = 14),
+           axis.title.x = element_text(vjust = -1, size = 14),
+           axis.text = element_text(size = 13)
+         ) 
+     } else if (input$trapTime == "custom") {
+       ggplot(data = abund_data(), aes(x = date, y = cases)) +
+         geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+         geom_line(color = "sienna4", linewidth = 0.6) +
+         labs(y = "Weekly abundance",
+              x = "Year") +
+         theme_classic() +
+         theme(
+           # axis.title.x = element_text(face = "bold", vjust = -1),
+           axis.title.y = element_text(vjust = 2, size = 14),
+           axis.title.x = element_text(vjust = -1, size = 14),
+           axis.text = element_text(size = 13)
+         ) 
+     }
+   })
+   
+   
+   ## WNV plot
+    output$wnv_plot <- renderPlot({
+      if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
+        return(NULL)
+      } else if (input$trapTime == "annual") {
+        ggplot(data = wnv_data(), aes(x = year, y = cases)) +
+          ## By zip code
+          geom_point(color = "plum1", size = 3, alpha = 0.6) +
+          geom_line(color = "plum4", linewidth = 0.6) +
+          labs(y = "Annual MIR",
+               x = "Year") +
+          theme_classic() +
+          theme(
+            # axis.title.x = element_text(face = "bold", vjust = -1),
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)
+          ) 
+      } else if (input$trapTime == "monthly") {
+        ggplot(data = wnv_data(), aes(x = year, y = cases)) +
+          geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+          geom_line(color = "sienna4", linewidth = 0.6) +
+          labs(y = "Monthly MIR",
+               x = "Year") +
+          theme_classic() +
+          theme(
+            # axis.title.x = element_text(face = "bold", vjust = -1),
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)
+          ) 
+      } else if (input$trapTime == "custom") {
+        ggplot(data = wnv_data(), aes(x = date, y = cases)) +
+          geom_point(color = "sienna2", size = 3, alpha = 0.6) +
+          geom_line(color = "sienna4", linewidth = 0.6) +
+          labs(y = "Weekly MIR",
+               x = "Year") +
+          theme_classic() +
+          theme(
+            # axis.title.x = element_text(face = "bold", vjust = -1),
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)
+          ) 
+      }
+    })
+    
   
-  
- 
-  
-  
-  ## Trap plot
-  output$trap_plot <- renderPlot({
-    if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else if (input$trapTime == "annual") {
-      ggplot() +
-        ## By zip code
-        geom_point(data = trap_data(), 
-                   aes(x = Year, y = cases),
-                   color = "sienna2", size = 3, alpha = 0.6) +
-        geom_line(data = trap_data(), 
-                  aes(x = Year, y = cases),
-                  linewidth = 0.6, color = "sienna4") +
-        ## All county
-        geom_point(data = trap_data_county(),
-                   aes(x = Year, y = cases),
-                   color = "forestgreen", size = 3, alpha = 0.6) +
-        geom_line(data = trap_data_county(),
-                  aes(x = Year, y = cases),
-                  linewidth = 0.6, color = "darkgreen") +
-        labs(y = "Annual trapped cases",
-             x = "Year") +
-        theme_classic() +
-        theme(
-          # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.title.x = element_text(vjust = -1, size = 14),
-          axis.text = element_text(size = 13)
-        ) 
-    } else {
-      ggplot(data = trap_data(), aes(x = Year, y = cases)) +
-        geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-        geom_line(linewidth = 0.6, color = "sienna4") +
-        labs(y = "Monthly trapped cases",
-             x = "Year") +
-        theme_classic() +
-        theme(
-          # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.title.x = element_text(vjust = -1, size = 14),
-          axis.text = element_text(size = 13)
-        ) 
-    }
-  })
-  
-  
-  
+    ## Reactive caption for map
+    output$trapPlots_caption <- renderText({
+      paste("<b>","Figure 2:","</b>","Plots of mosquito abundance (left) and WNV minimum infection rate (MIR; right) by zip code within Kern County, California.")
+    })
   
   
 } ### END SERVER

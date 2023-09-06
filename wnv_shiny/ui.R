@@ -74,12 +74,13 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                          value = NULL,
                          placeholder = "Enter your zip code..."
                ),
+               br(),
   
                ### Abundance/WNV:
-               radioButtons("trapRadio", label = h4("Metric:"),
-                            inline = TRUE,
-                            choices = c("Abundance" = "abundance",
-                                        "WNV cases" = "wnv")),
+               # radioButtons("trapRadio", label = h4("Metric:"),
+               #              inline = TRUE,
+               #              choices = c("Abundance" = "abundance",
+               #                          "WNV cases" = "wnv")),
                
                ### Time period:
                h4("Time period:"),
@@ -91,15 +92,22 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                                                selected = "annual")),
                  column(width = 6, uiOutput("trapMonth"))
                ),
-               uiOutput("trapDates"),
+               uiOutput("trap_dateRange"),
                
              ), ### End side panel
              
+             ### Interactive map:
              mainPanel(
-               leafletOutput("trapMap", height = "400px"),
+               leafletOutput("trapMap", height = "380px"),
                htmlOutput("trapMap_caption"),
-               br(),
-               plotOutput("trap_plot"))
+               br(), br()),
+             
+             ### Plots
+             fluidRow(
+               column(width = 6, plotOutput("abund_plot")),
+               column(width = 6, plotOutput("wnv_plot"))
+             ),
+             htmlOutput("trapPlots_caption")
              
              
              ), ## END TAB 2

@@ -279,7 +279,10 @@ Andy's new data:
 wnv <- read_csv(here('data/traps/wnvMIRPIR1500LagWeeks0_NA.csv')) %>% 
   janitor::clean_names() %>% 
   inner_join(x = .,y = clust_zips) %>% 
-  dplyr::select(zipcode, clust:woy, date, pool_size, num_pools,mir_all, mir_spline_all)
+  dplyr::select(zipcode, clust:woy, date, 
+                pool_size, num_pools,mir_all, mir_spline_all) %>%
+  mutate(month = lubridate::month(date),
+         .before = year)
 write_csv(wnv, here("data/traps/wnvMIR_plotting.csv"))
 
 
@@ -287,8 +290,11 @@ write_csv(wnv, here("data/traps/wnvMIR_plotting.csv"))
 abund <- read_csv(here('data/traps/all1500LagWeeks0_NA.csv')) %>% 
   janitor::clean_names() %>% 
   inner_join(x=., y=clust_zips) %>% 
-  dplyr::select(zipcode, clust:woy, collection_date, mos_per_trap_night)
-write_csv(abund, here("data/traps/all_plotting.csv"))
+  dplyr::select(zipcode, clust:woy, collection_date, mos_per_trap_night) %>% 
+  rename(date = collection_date) %>% 
+  mutate(month = lubridate::month(date),
+         .before = year)
+write_csv(abund, here("data/traps/abundance_plotting.csv"))
 ```
 
 
@@ -320,13 +326,16 @@ traps_kern_sf <- st_as_sf(traps_kern)
 cases_kern <- read_csv(here('data/wnv_cases/wnv_kern.csv')) %>% 
   janitor::clean_names()
 
-cases_zip_yr <- cases_kern %>% 
-  filter(zipcode == 93203) %>% 
+zip = 93203
+
+cases_zip_yr <- wnv %>% 
+  filter(zipcode == zip,
+         date >= "2018-05-12" & date <= "2020-01-01")
   group_by(year) %>% 
-  summarize(cases = sum(count))
+  summarize(cases = sum(mir_spline_all, na.rm = TRUE))
 
 
-ggplot(data = cases_zip_yr, aes(x = year, y = cases))+
+ggplot(data = cases_zip_yr, aes(x = date, y = mir_all))+
   geom_point(color = "sienna2", size = 3, alpha = 0.6) +
   geom_line(linewidth = 1, color = "sienna4") +
   labs(y = "Annual cases",

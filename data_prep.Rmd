@@ -270,29 +270,25 @@ zips <- read_sf(here("data/zipcodes/kern_zips.shp")) %>%
 
 clust_zips <- st_centroid(clust) %>% 
   st_join(zips)
-
-zips$area <- st_area(zips)
 ```
 
 
 Andy's new data:
 ```{r}
-## Read in data
-infect <- read_csv(here('data/traps/wnvMIRPIR1500LagWeeks0.csv')) %>% 
-  janitor::clean_names()
-
-## Select variables of interest
-infect1 <- infect %>% 
-  dplyr::select(clust, date, mir_all, mir_spline_all, pool_size, num_pools) %>% 
-  rename(numPools_clust = num_pools)
-
-
-
-
+## wnv infection
+wnv <- read_csv(here('data/traps/wnvMIRPIR1500LagWeeks0_NA.csv')) %>% 
+  janitor::clean_names() %>% 
+  inner_join(x = .,y = clust_zips) %>% 
+  dplyr::select(zipcode, clust:woy, date, pool_size, num_pools,mir_all, mir_spline_all)
+write_csv(wnv, here("data/traps/wnvMIR_plotting.csv"))
 
 
 ### abundance
-abund <- read_csv(here('data/traps/all1500LagWeeks0.csv'))
+abund <- read_csv(here('data/traps/all1500LagWeeks0_NA.csv')) %>% 
+  janitor::clean_names() %>% 
+  inner_join(x=., y=clust_zips) %>% 
+  dplyr::select(zipcode, clust:woy, collection_date, mos_per_trap_night)
+write_csv(abund, here("data/traps/all_plotting.csv"))
 ```
 
 

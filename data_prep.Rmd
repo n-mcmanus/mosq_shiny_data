@@ -269,7 +269,11 @@ zips <- read_sf(here("data/zipcodes/kern_zips.shp")) %>%
   st_transform(crs = crs(clust))
 
 clust_zips <- st_centroid(clust) %>% 
-  st_join(zips)
+  st_join(zips) %>% 
+  ## centroid of clust 9 *just* outside
+  ## manually adding to zip 93280
+  within(., zipcode[clust == 9] <- 93280) %>% 
+  within(., area_m2[clust == 9] <- (zips$area_m2[zips$zipcode==93280]))
 ```
 
 
@@ -278,9 +282,11 @@ Andy's new data:
 ## wnv infection
 wnv <- read_csv(here('data/traps/wnvMIRPIR1500LagWeeks0_NA.csv')) %>% 
   janitor::clean_names() %>% 
+  ## assign zip by clust
   inner_join(x = .,y = clust_zips) %>% 
+  ## filter for relevant vars
   dplyr::select(zipcode, clust:woy, date, 
-                pool_size, num_pools,mir_all, mir_spline_all) %>%
+                pool_size, num_pools, mir_all, mir_spline_all) %>%
   mutate(month = lubridate::month(date),
          .before = year)
 write_csv(wnv, here("data/traps/wnvMIR_plotting.csv"))
@@ -289,7 +295,9 @@ write_csv(wnv, here("data/traps/wnvMIR_plotting.csv"))
 ### abundance
 abund <- read_csv(here('data/traps/all1500LagWeeks0_NA.csv')) %>% 
   janitor::clean_names() %>% 
+  ## assign zip by clust
   inner_join(x=., y=clust_zips) %>% 
+  ## filter for relevant vars
   dplyr::select(zipcode, clust:woy, collection_date, mos_per_trap_night) %>% 
   rename(date = collection_date) %>% 
   mutate(month = lubridate::month(date),
@@ -299,45 +307,58 @@ write_csv(abund, here("data/traps/abundance_plotting.csv"))
 
 
 
-Old code:
-```{r}
-## Read in raw trap data
-traps <- vect(here('data/wnv_cases/shp_files/WNV_full_4_23_CA.shp'))
-
-## Read in zips and set to same crs as traps
-zips_kern <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
-  project(y = crs(traps))
-
-
-## Find intersection using terra (much faster) then
-## convert back to sf to save as a .csv
-traps_kern <- terra::intersect(zips_kern, traps)
-traps_kern_sf <- st_as_sf(traps_kern)
-
-## Save intermediate .shp
-# st_write(traps_kern_sf, here('data/wnv_cases/shp_files/wnv_kern.shp'))
-## Save csv
-# write_csv(traps_kern_sf, here('data/wnv_cases/wnv_kern.csv'))
-```
-
-
+TEST WRANGLING/PLOTS:
 ```{r}
 ## Now filter data and create test plots
-cases_kern <- read_csv(here('data/wnv_cases/wnv_kern.csv')) %>% 
+abund <- read_csv(here("data/traps/abundance_plotting.csv")) %>% 
   janitor::clean_names()
+wnv <- read_csv(here("data/traps/wnvMIR_plotting.csv"))
 
 zip = 93203
 
 cases_zip_yr <- wnv %>% 
-  filter(zipcode == zip,
-         date >= "2018-05-12" & date <= "2020-01-01")
-  group_by(year) %>% 
-  summarize(cases = sum(mir_spline_all, na.rm = TRUE))
+  filter(zipcode == zip, 
+         date >= "2022-01-01" & date <= "2022-12-31") %>% 
+  group_by(year, woy) %>% 
+  summarize(avgMIR = mean(mir_all, na.rm = TRUE))
 
+zip_avg_cases <- wnv %>% 
+  filter(zipcode == zip) %>% 
+  group_by(woy) %>% 
+  summarize(avg = mean(mir_all, na.rm = TRUE))
 
-ggplot(data = cases_zip_yr, aes(x = date, y = mir_all))+
-  geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-  geom_line(linewidth = 1, color = "sienna4") +
+kern_avg_cases <- wnv %>% 
+  group_by(woy) %>% 
+  summarize(avg = mean(mir_all, na.rm = TRUE))
+
+zip_avgMIR <- wnv %>%  
+  filter(zipcode==zip)
+zip_avgMIR <- mean(zip_avgMIR$mir_all, na.rm = TRUE)
+
+kern_avgMIR <- mean(wnv$mir_all, na.rm = TRUE)
+
+ggplot()+
+  ## time frame in zip code
+  geom_point(data = cases_zip_yr, 
+             aes(x=woy, y = avgMIR),
+             color = "sienna2", size = 3, alpha = 0.6) +
+  geom_line(data = cases_zip_yr, 
+             aes(x=woy, y = avgMIR),
+            color = "sienna4") +
+  ## avg zipcode
+  geom_point(data = zip_avg_cases, 
+             aes(x=woy, y = avg),
+             color = "plum", size = 3, alpha = 0.6) +
+  geom_line(data = zip_avg_cases, 
+             aes(x=woy, y = avg),
+            color = "plum4") +
+  ## avg kern
+  geom_point(data = kern_avg_cases, 
+             aes(x=woy, y = avg),
+             color = "gray50", size = 3, alpha = 0.6) +
+  geom_line(data = kern_avg_cases, 
+             aes(x=woy, y = avg),
+            color = "black") +
   labs(y = "Annual cases",
        x = element_blank()) +
   theme_classic() +
@@ -346,17 +367,114 @@ ggplot(data = cases_zip_yr, aes(x = date, y = mir_all))+
     axis.title.y = element_text(face = 'bold', vjust = 3)
   )
 
-cases_zip_yr_mo <- cases_kern %>% 
-    ## user input ex
-  filter(zipcode == 93252) %>% 
-  filter(month == "Aug") %>% 
-  group_by(year) %>% 
-  summarize(cases = sum(count)) 
 
-ggplot(data = cases_zip_yr_mo, aes(x = year, y = cases))+
-  geom_point(color = "sienna2", size = 3, alpha = 0.6) +
-  geom_line(linewidth = 1, color = "sienna4") +
-  labs(y = "Cases by month",
+## abundance ---------------------------------------------------
+abund_cust <- abund %>% 
+  filter(zipcode == zip, 
+         date >= "2022-01-01" & date <= "2022-12-31") %>% 
+  group_by(year, woy) %>% 
+  summarize(avg = mean(mos_per_trap_night, na.rm = TRUE))
+
+zip_avg_abund <- abund %>% 
+  filter(zipcode == zip) %>% 
+  group_by(woy) %>% 
+  summarize(avg = mean(mos_per_trap_night, na.rm = TRUE))
+
+kern_avg_abund <- abund %>% 
+  group_by(woy) %>% 
+  summarize(avg = mean(mos_per_trap_night, na.rm = TRUE))
+
+## avg values
+cust_avgAbund <- abund %>% 
+  filter(zipcode == zip,
+         date >= "2022-01-01" & date <= "2022-12-31")
+cust_avgAbund <- mean(cust_avgAbund$mos_per_trap_night, na.rm = TRUE)
+
+zip_avgAbund <- abund %>%  
+  filter(zipcode==zip)
+zip_avgAbund <- mean(zip_avgAbund$mos_per_trap_night, na.rm = TRUE)
+
+kern_avgAbund <- mean(abund$mos_per_trap_night, na.rm = TRUE)
+
+
+## abundance comp (filled)
+ggplot()+
+  ## avg kern
+  geom_point(data = kern_avg_abund,
+             aes(x=woy, y = avg),
+             color = "gray30", size = 2.5, alpha = 0.6) +
+  geom_line(data = kern_avg_abund,
+             aes(x=woy, y = avg),
+            color = "black", linewidth = 0.6) +
+  geom_area(data = kern_avg_abund,
+            aes(x=woy, y = avg),
+            fill = "gray60", alpha=.4)+
+   # avg zipcode
+  geom_point(data = zip_avg_abund,
+             aes(x=woy, y = avg),
+             color = "plum", size = 2.5, alpha = 0.8) +
+  geom_line(data = zip_avg_abund,
+             aes(x=woy, y = avg),
+            color = "purple4", linewidth = 0.7) +
+   geom_area(data = zip_avg_abund,
+             aes(x=woy, y = avg),
+            fill = "plum", alpha=.5) +
+  ## user defined zip and time
+   geom_point(data = abund_cust, 
+             aes(x=woy, y = avg),
+             color = "sienna2", size = 2.5, alpha = 0.8) +
+  geom_line(data = abund_cust, 
+             aes(x=woy, y = avg),
+            color = "sienna4", linewidth = 0.7) +
+  geom_area(data = abund_cust, 
+             aes(x=woy, y = avg),
+            fill = "sienna2", alpha = .5) +
+  labs(y = "Average weekly abundance",
+       x = element_blank()) +
+  theme_classic() +
+  theme(
+    # axis.title.x = element_text(face = "bold", vjust = -1),
+    axis.title.y = element_text(face = 'bold', vjust = 3)
+  )
+
+## abundance comp (lines)
+ggplot()+
+  ## avg kern
+  geom_hline(yintercept = kern_avgAbund,
+            color = "black", linetype = "longdash", linewidth = 0.8) +
+  annotate("text", y = (kern_avgAbund+0.07), x = abund_cust$date[1],
+           hjust = 0,
+           label = "Average abundance across Kern county",
+           size = 3,
+           fontface = "bold") +
+   # avg zipcode
+  geom_hline(yintercept = zip_avgAbund,
+            color = "purple", linetype = "dashed", linewidth = 0.8) +
+  annotate("text", y = (zip_avgAbund+0.07), x = abund_cust$date[1],
+           hjust = 0,
+           label = "Average abundance across zip code",
+           size = 3,
+           color = "purple4",
+           fontface = "bold") +
+  ## user defined zip/year
+   geom_point(data = abund_cust, 
+             aes(x=date, y = avg),
+             color = "sienna2", size = 3, alpha = 0.6) +
+  geom_line(data = abund_cust, 
+             aes(x=date, y = avg),
+            color = "sienna4", linewidth = 0.8) +
+  geom_hline(yintercept = cust_avgAbund,
+             color = "sienna", linetype= "dashed", linewidth = 0.8)+
+  annotate("text", y = (cust_avgAbund+0.07), x = abund_cust$date[1],
+           hjust = 0,
+           label = "Average abundance for zipcode and time period",
+           size = 3,
+           color = "sienna4",
+           fontface = "bold") +
+  # geom_area(data = abund_cust, 
+  #            aes(x=woy, y = avg),
+  #           fill = "sienna2", alpha = .5) +
+  labs(y = "Average weekly abundance",
        x = element_blank()) +
   theme_classic() +
   theme(

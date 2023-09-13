@@ -68,9 +68,9 @@ navbarPage(title = "WNV in Kern County", id = "nav",
              p("You can view information by zip code either by entering the zip code of interest on the left-hand panel, or by clicking on the zip code within the map on the right."),
              ### Side Panel: 
              sidebarPanel(
-               h3(strong("Trap data:")),
+               # h3(strong("Trap data:")),
                ### Zipcode input:
-               textInput(inputId = "zip_box_trap", label = h4("Zip code:"),
+               textInput(inputId = "zip_box_trap", label = h4(strong("Zip code:")),
                          value = NULL,
                          placeholder = "Enter your zip code..."
                ),
@@ -82,17 +82,48 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                #              choices = c("Abundance" = "abundance",
                #                          "WNV cases" = "wnv")),
                
-               ### Time period:
-               h4("Time period:"),
+               
+               
+               h4(strong("Time period:")),
+               p("Quick selection:"),
                fluidRow(   ## put both input boxes in-line
-                 column(width = 6, selectInput("trapTime", label = "Select timeframe:",
-                                               choices = list("Annual" = "annual",
-                                                              "Monthly" = "monthly",
-                                                              "Custom" = "custom"),
-                                               selected = "annual")),
-                 column(width = 6, uiOutput("trapMonth"))
+                 column(width = 6, selectInput("trapYear", label = "Year:",
+                                               choices = list("2023" = "2023",
+                                                              "2022" = "2022",
+                                                              "2021" = "2021",
+                                                              "2020" = "2020",
+                                                              "2019" = "2019",
+                                                              "2018" = "2018"),
+                                               selected = 2023)),
+                 column(width = 6, selectInput("trapMonth", label = "Month:",
+                                               choices = list("NA" = "none",
+                                                              "June" = "06",
+                                                              "July" = "07",
+                                                              "August" = "08",
+                                                              "September" = "09",
+                                                              "October" = "10"),
+                                               selected = "NA"))
                ),
-               uiOutput("trap_dateRange"),
+               p("Custom date range:"),
+               dateRangeInput("trap_dateRange", 
+                              label = NULL,
+                              start = "2023-01-01",
+                              end = "2023-07-31",
+                              min = "2018-04-15",
+                              max = "2023-07-31"),
+               
+               
+               ### Time period (OLD CODE):
+               # h4("Time period:"),
+               # fluidRow(   ## put both input boxes in-line
+               #   column(width = 6, selectInput("trapTime", label = "Select timeframe:",
+               #                                 choices = list("Annual" = "annual",
+               #                                                "Monthly" = "monthly",
+               #                                                "Custom" = "custom"),
+               #                                 selected = "annual")),
+               #   column(width = 6, uiOutput("trapMonth"))
+               # ),
+               # uiOutput("trap_dateRange"),
                
              ), ### End side panel
              
@@ -104,10 +135,14 @@ navbarPage(title = "WNV in Kern County", id = "nav",
              
              ### Plots
              fluidRow(
-               column(width = 6, plotOutput("abund_plot")),
-               column(width = 6, plotOutput("wnv_plot"))
+               column(width = 6, uiOutput("abund_plot")),
+               column(width = 6, uiOutput("wnv_plot"))
              ),
-             htmlOutput("trapPlots_caption")
+             fluidRow(
+               column(width = 6, style='padding-left:55px;', htmlOutput("abundPlot_caption")),
+               column(width = 6, style='padding-left:55px;', htmlOutput("wnvPlot_caption"))
+             ),
+             br()
              
              
              ), ## END TAB 2

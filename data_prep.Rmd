@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library()
 library(tidyverse)    ## always
 library(here)         ## consistent file paths
 library(stringr)      ## split up file names
@@ -187,6 +188,15 @@ waterStats_df <- pmap_dfr(waterInput_df, waterStats, zip_vect = kern_zips, .prog
 
 ## export as .csv
 write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
+```
+
+test animated plot
+```{r}
+water <- list.files(path = here("data/water/Landsat_Dan//"),
+                    full.names = T)
+waterRast <- raster::stack(water)
+
+
 ```
 
 

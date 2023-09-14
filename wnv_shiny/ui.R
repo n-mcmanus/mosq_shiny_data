@@ -64,7 +64,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     tabPanel("Mosquito Data",
              value = "tab2",
              h2("Mosquito Abundance and WNV"),
-             p("Here will be info and copy about the data, such as: Mosquito abundance and WNV data comes from monitoring and testing efforts of the Kern Mosquito and Vector Control District. Copy on methodology: Traps are layed out and checked every 1-X days. These pools of trapped mosquitos are then tested for a range of mosquito-borne diseases. To standardize for monitoring effort, abundance and WNV cases are reported as mosquitos per trap night and minimum infection rate (MRI), respectively. For more details, click on the information icon in the navigation bar."),
+             p("Here will be info and copy about the data, such as: Mosquito abundance and WNV data comes from monitoring and testing efforts of the Kern Mosquito and Vector Control District. Copy on methodology: Traps are layed out and checked every 1-X days. These pools of trapped mosquitos are then tested for a range of mosquito-borne diseases. To standardize for monitoring effort, abundance and WNV cases are reported as mosquitos per trap night and minimum infection rate (MIR), respectively. For more details, click on the information icon in the navigation bar."),
              p("You can view information by zip code either by entering the zip code of interest on the left-hand panel, or by clicking on the zip code within the map on the right."),
              ### Side Panel: 
              sidebarPanel(
@@ -85,7 +85,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                
                
                h4(strong("Time period:")),
-               p("Quick selection:"),
+               # p("Quick selection:"),
                fluidRow(   ## put both input boxes in-line
                  column(width = 6, selectInput("trapYear", label = "Year:",
                                                choices = list("2023" = "2023",

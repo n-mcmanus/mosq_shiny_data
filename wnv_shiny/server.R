@@ -194,11 +194,7 @@ function(input, output, session) {
       ivTemp$add_rule("temp_dateRange", 
                       ~ if(input$temp_dateRange[2] > "2023-07-31") 
                         "End date must be before 2023-07-31.")
-      ### Range of 2+ weeks
-      ivTemp$add_rule("temp_dateRange", 
-                      ~ if(difftime(input$temp_dateRange[2],
-                                    input$temp_dateRange[1])<14)
-                        "Date range less than 14 days")
+
   ivTemp$enable()
   
   ## Number of days at optimal temp
@@ -240,6 +236,34 @@ function(input, output, session) {
   output$temp_plot <- renderPlot({
     if (!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
+    } else if (difftime(input$temp_dateRange[2],
+                        input$temp_dateRange[1]) <= 31) {
+      ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
+        geom_rect(xmin = -Inf, xmax = Inf, ymax = 89.42, ymin = 78.6,
+                  alpha = 0.05, fill = "gray89")+
+        geom_rect(xmin = -Inf, xmax = Inf, ymax = 78.6, ymin = 73.2,
+                  alpha = 0.05, fill = "gray81")+
+        geom_rect(xmin = -Inf, xmax = Inf, ymax = 73.2, ymin = 53.78,
+                  alpha = 0.05, fill = "gray89")+
+        geom_point(size = 3, 
+                   alpha = 0.7,
+                   aes(color = cx_opt)) +
+        scale_color_manual(name = "",
+                           values = c("firebrick2","goldenrod3", "dodgerblue"))+
+        geom_line(linewidth = 0.7) +
+        labs(y = "Mean daily temp (F)",
+             x = element_blank()) +
+        scale_x_date(date_labels = "%d\n%b") +
+        geom_hline(yintercept = 89.42, linetype = "dashed", color = "gray50")+
+        geom_hline(yintercept = 78.6, linetype = "dashed", color = "gray50")+
+        geom_hline(yintercept = 73.2, linetype = "dashed", color = "gray50")+
+        geom_hline(yintercept = 53.78, linetype = "dashed", color = "gray50")+
+        theme_classic() +
+        theme(
+          axis.title.y = element_text(vjust = 2, size = 14),
+          axis.title.x = element_text(vjust = -1, size = 14),
+          axis.text = element_text(size = 13),
+          legend.position = "none")
     } else {
       ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
         geom_rect(xmin = -Inf, xmax = Inf, ymax = 89.42, ymin = 78.6,
@@ -255,7 +279,7 @@ function(input, output, session) {
                            values = c("firebrick2","goldenrod3", "dodgerblue"))+
         geom_line(linewidth = 0.7) +
         labs(y = "Mean daily temp (F)",
-             x = "Date") +
+             x = element_blank()) +
         scale_x_date(date_labels = "%b %y") +
         geom_hline(yintercept = 89.42, linetype = "dashed", color = "gray50")+
         geom_hline(yintercept = 78.6, linetype = "dashed", color = "gray50")+
@@ -263,12 +287,10 @@ function(input, output, session) {
         geom_hline(yintercept = 53.78, linetype = "dashed", color = "gray50")+
         theme_classic() +
         theme(
-          # axis.title.x = element_text(face = "bold", vjust = -1),
           axis.title.y = element_text(vjust = 2, size = 14),
           axis.title.x = element_text(vjust = -1, size = 14),
           axis.text = element_text(size = 13),
-          legend.position = "none"
-        )
+          legend.position = "none")
     }
   })
   
@@ -674,13 +696,9 @@ function(input, output, session) {
        strong("No abundance data available for this location and time.")
        ## If plotting under a month, change x-axis labels
      } else if (difftime(input$trap_dateRange[2],
-                         input$trap_dateRange[1]) <= 31) {
+                         input$trap_dateRange[1]) <= 62) {
        renderPlot({
          ggplot(data = abund_data(), aes(x = date, y = cases)) +
-           ## Filtered zip/time data
-           geom_point(color = "seagreen2", size = 3, alpha = 0.9) +
-           geom_line(color = "seagreen4", linewidth = 0.6) +
-           
            ## Kern avg (in time period):
            geom_hline(yintercept = avgAbund_kern(),
                       color = "black", linetype = "dashed", linewidth = 0.8) +
@@ -688,10 +706,13 @@ function(input, output, session) {
            ## Zip avg (all time):
            geom_hline(yintercept = avgAbund_zip(),
                       color = "purple", linetype = "dashed", linewidth = 0.8) +
-
+           ## Filtered zip/time data
+           geom_line(color = "seagreen4", linewidth = 0.8) +
+           geom_point(color = "seagreen3", size = 3, alpha = 0.8) +
            labs(y = "Average weekly abundance",
                 x = element_blank()) +
-           scale_x_date(date_labels = "%d %b %y") +
+           scale_x_date(date_labels = "%d %b %y",
+                        breaks = unique(abund_data()$date)) +
            theme_classic() +
            theme(
              axis.title.y = element_text(vjust = 2, size = 14),
@@ -701,23 +722,15 @@ function(input, output, session) {
      } else {
        renderPlot({
          ggplot(data = abund_data(), aes(x = date, y = cases)) +
-           ## Filtered zip/time data
-           geom_point(color = "seagreen2", size = 3, alpha = 0.9) +
-           geom_line(color = "seagreen4", linewidth = 0.6) +
-           
            ## Kern avg (in time period):
            geom_hline(yintercept = avgAbund_kern(),
                       color = "black", linetype = "dashed", linewidth = 0.8) +
-           # annotate("text", y=(avgAbund_kern()+(0.035*(max(abund_data()$cases)))), 
-           #          x=abund_data()$date[1],
-           #          hjust = 0,
-           #          label = "Average abundance within time period",
-           #          size = 4,
-           #          fontface = "bold") +
-           
            ## Zip avg (all time):
            geom_hline(yintercept = avgAbund_zip(),
                       color = "purple", linetype = "dashed", linewidth = 0.8) +
+           ## Filtered zip/time data
+           geom_line(color = "seagreen4", linewidth = 0.8) +
+           geom_point(color = "seagreen3", size = 3, alpha = 0.8) +
            labs(y = "Average weekly abundance",
                 x = element_blank()) +
            scale_x_date(date_labels = "%b %y",
@@ -739,7 +752,7 @@ function(input, output, session) {
       } else if (all(is.na(wnv_data()$cases))) {
         strong("No infection data available for this location and time.")
       } else if (difftime(input$trap_dateRange[2],
-                          input$trap_dateRange[1]) <= 31) {
+                          input$trap_dateRange[1]) <= 62) {
         renderPlot({
           ggplot(data = wnv_data(), aes(x = date, y = cases)) +
             ## Filtered to zip/time

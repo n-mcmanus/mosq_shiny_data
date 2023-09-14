@@ -26,8 +26,8 @@ wnv_df <- read_csv(here('data/traps/wnvMIR_plotting.csv'))
 abund_df <- read_csv(here('data/traps/abundance_plotting.csv')) %>% 
   janitor::clean_names()
 temp_zip_df <- read_csv(here('data/temp/kern_tmean_20180101_20230731.csv')) %>% 
-  mutate(cxTar_opt = factor(cxTar_opt),
-         cxTar_opt = fct_relevel(cxTar_opt, levels = c("TRUE", "FALSE")))
+  mutate(cx_opt = factor(cx_opt),
+         cx_opt = fct_relevel(cx_opt, levels = c("optimal", "in range", "out range")))
 
 ## Raster color palette
 pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
@@ -45,7 +45,7 @@ function(input, output, session) {
   ## Initial modal on app launch
   shinyalert(
     title = "Welcome",
-    text = paste0("This app let's you explore the risks and hazards associated with West Nile Virus (WNV) in Kern County, California. Information by zip code* can be viewed by either manually typing the zip code at the upper right, or clicking the zip code on the map.", "<br>", "<br>", "For more information on WNV transmission and the data used for this app, select the 'More Info' button or click on the information icon at the top of the page.", "<br>", "<br>", "<span style='font-size: 13px;'>", "<i>", "*(Note: Zip code boundaries have been limited to the extent present within both Kern County and the California Central Valley. These boundaries can be visually toggled by (un)selecting layers listed at the top left of the map.", "</i>", ")",  "</span>"),
+    text = paste0("This app let's you explore the risks and hazards associated with West Nile Virus (WNV) transmission in Kern County, California. Information by zip code* can be explored by either manually typing the zip code at the upper right, or by clicking the location on the map.", "<br>", "<br>", "For more information on WNV transmission and the data used for this app, select the 'More Info' button or click on the information icon at the top of the page.", "<br>", "<br>", "<span style='font-size: 13px;'>", "<i>", "*(Note: Zip code boundaries have been limited to the extent present within both Kern County and the California Central Valley. These boundaries can be visually toggled by (un)selecting layers listed at the top left of the map.", "</i>", ")",  "</span>"),
     size = "m", 
     closeOnEsc = TRUE,
     closeOnClickOutside = TRUE,
@@ -201,16 +201,28 @@ function(input, output, session) {
                         "Date range less than 14 days")
   ivTemp$enable()
   
-  ## Number of days (and percentage) in range
-  tempDays_int <- reactive({
-    days = sum(temp_zip()$cxTar_opt == "TRUE")
+  ## Number of days at optimal temp
+  tempOptDays_int <- reactive({
+    days = sum(temp_zip()$cx_opt == "optimal")
     
     return(days)
   })
+  ## Percent of days at optimal temp
+  tempOptDays_per <- reactive({
+    percent = round((tempOptDays_int()/(nrow(temp_zip())))*100, 2)
+    
+    return(percent)
+  })
   
-  ## Percent of days in range
-  tempDays_per <- reactive({
-    percent = round((tempDays_int()/(nrow(temp_zip())))*100, 2)
+  ## Number of days in temp range
+  tempRangeDays_int <- reactive({
+    days = sum(temp_zip()$cx_opt == "in range")
+    
+    return(days)
+  })
+  ## Percent of days in temp range
+  tempRangeDays_per <- reactive({
+    percent = round(((tempRangeDays_int()+tempOptDays_int())/(nrow(temp_zip())))*100, 2)
     
     return(percent)
   })
@@ -220,7 +232,7 @@ function(input, output, session) {
     if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
-      paste0("In this time period, ", "<b>",tempDays_int(), " days ","</b>",  "(", tempDays_per(), "%)",  " fell within the optimal temperature range for WNV transmission by ", "<i>","Culex tarsalis","</i>", " mosquitos.")
+      paste0("In this time period, ", "<b>",tempOptDays_int(), " days ","</b>",  "(", tempOptDays_per(), "%)",  " fell within the optimal temperature range (red) and ", tempRangeDays_int(), " days (", tempRangeDays_per(),"%) fell within the thermal limits (orange) for WNV transmission by ", "<i>","Culex","</i>", " mosquitos.")
     }
   })
   
@@ -230,24 +242,25 @@ function(input, output, session) {
       return(NULL)
     } else {
       ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
+        geom_rect(xmin = -Inf, xmax = Inf, ymax = 89.42, ymin = 78.6,
+                  alpha = 0.05, fill = "gray89")+
         geom_rect(xmin = -Inf, xmax = Inf, ymax = 78.6, ymin = 73.2,
-                  alpha = 0.05, fill = "gray85")+
+                  alpha = 0.05, fill = "gray81")+
+        geom_rect(xmin = -Inf, xmax = Inf, ymax = 73.2, ymin = 53.78,
+                  alpha = 0.05, fill = "gray89")+
         geom_point(size = 3, 
                    alpha = 0.7,
-                   aes(color = cxTar_opt)) +
+                   aes(color = cx_opt)) +
         scale_color_manual(name = "",
-                           values = c("firebrick2", "dodgerblue"))+
+                           values = c("firebrick2","goldenrod3", "dodgerblue"))+
         geom_line(linewidth = 0.7) +
         labs(y = "Mean daily temp (F)",
              x = "Date") +
         scale_x_date(date_labels = "%b %y") +
-        geom_hline(yintercept = 73.2, linetype = "dashed", color = "gray50")+
+        geom_hline(yintercept = 89.42, linetype = "dashed", color = "gray50")+
         geom_hline(yintercept = 78.6, linetype = "dashed", color = "gray50")+
-        # annotate("text", y = 74, x = as.Date(temp_zip()$date[1]),
-        #          hjust = 0,
-        #          label = "Optimal range for\nWNV transmission",
-        #          size = 3,
-        #          fontface = "bold") +
+        geom_hline(yintercept = 73.2, linetype = "dashed", color = "gray50")+
+        geom_hline(yintercept = 53.78, linetype = "dashed", color = "gray50")+
         theme_classic() +
         theme(
           # axis.title.x = element_text(face = "bold", vjust = -1),
@@ -580,7 +593,7 @@ function(input, output, session) {
   
   ## Reactive caption for map
   output$trapMap_caption <- renderText({
-    paste("<b>","Figure 1:","</b>","Interactive map of zip codes within the Central Valley and Kern County, California. The selected zip code is outline in yellow. Borders for Kern County and the central valley can be toggled using the map options in the upper left corner.")
+    paste("<b>","Figure 1:","</b>","Interactive map of zip codes within the Central Valley and Kern County, California. The selected zip code is outline in yellow, and the border for the central valley is shown in blue. Borders for Kern County and the central valley can be toggled using the map options in the upper left corner.")
   })
   
   

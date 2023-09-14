@@ -9,7 +9,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
            
            
     ## TAB 1: WNV Interactive Map ----------------------------------------------  
-    tabPanel("Interactive map",
+    tabPanel("Risk Map",
              id = "tab1",
         div(class = "outer",
             
@@ -61,10 +61,10 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     
     
     ## TAB 2: WNV TRAP CASES ---------------------------------------------------
-    tabPanel("Trap cases",
+    tabPanel("Mosquito Data",
              value = "tab2",
              h2("Mosquito Abundance and WNV"),
-             p("Here will be info and copy about the data, such as: Mosquito abundance and WNV data comes from monitoring and testing efforts by the Kern County Vector Control Board. Copy on methodology: Traps are layed out and checked every 1-X days. These pools of mosquitos are then tested for a range of mosquito-borne diseases. To standardize for monitoring effort, abundance and WNV cases are reported as mosquitos per trap night and minimum infection rate (MRI), respectively. For more information, click on the icon."),
+             p("Here will be info and copy about the data, such as: Mosquito abundance and WNV data comes from monitoring and testing efforts of the Kern Mosquito and Vector Control District. Copy on methodology: Traps are layed out and checked every 1-X days. These pools of trapped mosquitos are then tested for a range of mosquito-borne diseases. To standardize for monitoring effort, abundance and WNV cases are reported as mosquitos per trap night and minimum infection rate (MRI), respectively. For more details, click on the information icon in the navigation bar."),
              p("You can view information by zip code either by entering the zip code of interest on the left-hand panel, or by clicking on the zip code within the map on the right."),
              ### Side Panel: 
              sidebarPanel(

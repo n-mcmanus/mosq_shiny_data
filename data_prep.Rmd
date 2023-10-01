@@ -190,6 +190,99 @@ waterStats_df <- pmap_dfr(waterInput_df, waterStats, zip_vect = kern_zips, .prog
 write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
 ```
 
+Water rasters for gif. Must be same extent, resolution, and number of rows/columns. First we'll merged and export all the path42 rasters by date. Then, we'll read in these new rasters and merge them to determine the extent that they all should have in common. Finally, we'll change the extent of each raster to that of the merged, stack it, and save.
+```{r}
+## Create paths for water rasters and masks
+path35 <- here('data/water/Landsat_Dan/p042r035//')
+path36 <- here('data/water/Landsat_Dan/p042r036//')
+
+## Extract dates for each based on LANDSAT naming convention
+dates <- function(files) {
+  str_split(files, "_", simplify = TRUE) %>% 
+  as.data.frame() %>%
+  mutate(date = lubridate::ymd(V4)) %>%
+  dplyr::select(date)
+}
+
+## One df with all files and dates
+waterInput_df <- data.frame("rast35" = list.files(path35, 
+                                                  pattern="_T.TIF"),
+                            "mask35" = list.files(path35, 
+                                                  pattern = "QA_PIXEL.TIF"),
+                            "rast36" = list.files(path36, 
+                                                  pattern="_T.TIF"),
+                            "mask36" = list.files(path36,
+                                                  pattern="QA_PIXEL.TIF")) %>%
+  ## extract date from r35
+  mutate(dates(rast35))
+
+## Function to perform zonal stats and output results
+waterMerge <- function(rast35, mask35, rast36, mask36, date) {
+  
+  ## raster and mask for row 35 -------------  
+  r35 <- rast(paste0(path35, rast35))
+  names(r35) <- "rast"
+  m35 <- rast(paste0(path35, mask35))
+  ## mask values of 1 are NA
+  m35[m35 == 1] <- NA
+  ## mask raster 35
+  r_masked35 <- terra::mask(r35, m35)
+ 
+  ## raster and mask for row 36 ---------------
+  r36 <- rast(paste0(path36, rast36))
+  names(r36) <- "rast"
+  m36 <- rast(paste0(path36, mask36))
+  ## mask values of 1 are NA
+  m36[m36 == 1] <- NA
+  ## mask raster 36
+  r_masked36 <- terra::mask(r36, m36)
+ 
+  ## merge rasts using SpatRastCollection
+  s <- sprc(r_masked35, r_masked36)
+  m <- merge(s)
+  
+  # assign(paste0("rast", date), m)
+  
+  writeRaster(m, paste0(here("data/water/masked_merged//"), "p42_merged_", date, ".tif"))
+}
+
+## Run fxn over df of variables
+pmap(waterInput_df, waterMerge, .progress = TRUE)
+
+
+## To stack for gif, need the same extent.
+## Each image slightly different bc of satellite path.
+## Merge all the p42 rasts to find overall extent, then use to crop
+rasts = list.files(here("data/water/masked_merged/"),
+                   pattern = "p42_merged_",
+                   full.names = T)
+
+for (i in 1:length(rasts)) {
+  r = rast(rasts[i])
+  assign(paste0("rast", i), r)
+}
+
+s <- sprc(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
+          rast8, rast9, rast10, rast11, rast12, rast12, rast14)
+m <- merge(s)
+
+for (i in 1:length(rasts)) {
+  r = rast(rasts[i])
+  resamp <- resample(r, m)
+  assign(paste0("rast", i), resamp)
+}
+
+
+stack = c(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
+          rast8, rast9, rast10, rast11, rast12, rast12, rast14)
+
+writeRaster(stack, here("data/water/masked_merged/p42_merged_stack.tif"))
+
+test = raster::stack(here("data/water/masked_merged/p42_merged_stack.tif"))
+raster::animate(test)
+```
+
+
 test animated plot
 ```{r}
 water <- list.files(path = here("data/water/Landsat_Dan//"),

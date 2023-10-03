@@ -136,13 +136,14 @@ convert_tif(path = here("data/water/Landsat_Dan/p042r035/2022//"))
 
 ```
 
-Here we'll run zonal stats to determine how much standing water is present in each zip code. This information will be exported as a .csv and used for the Shiny app. To do this, we'll need to first ensure that our `kern_zips.shp` are the same crs as the water rasters. Then we'll use a function to loop through all the water rasters within the directory.
+#### Merge images
+Our AOI is split between two Landsat images (rows 35 and row 36 within path 42). First we'll merge and export them by each date. Then, we'll merge these new rasters and merge them all to determine a common extent. Finally, we'll change the extent of each raster to that of the merged, stack it, and save for use as gif in shiny.
 ```{r}
 ## Create paths for water rasters and masks
-path35 <- here('data/water/Landsat_Dan/p042r035//')
-path36 <- here('data/water/Landsat_Dan/p042r036//')
+path35 <- here('data/water/Landsat_Dan/p042r035/2022//')
+path36 <- here('data/water/Landsat_Dan/p042r036/2022//')
 
-## Extract dates for each based on LANDSAT naming convention
+## Fxn to extract dates based on LANDSAT naming convention
 dates <- function(files) {
   str_split(files, "_", simplify = TRUE) %>% 
   as.data.frame() %>%
@@ -150,24 +151,17 @@ dates <- function(files) {
   dplyr::select(date)
 }
 
-## One df with all files and dates
-waterInput_df <- data.frame("rast35" = list.files(path35, pattern="_T.TIF"),
-                            "mask35" = list.files(path35, pattern = "QA_PIXEL.TIF"),
-                            "rast36" = list.files(path36, pattern="_T.TIF"),
-                            "mask36" = list.files(path36, pattern="QA_PIXEL.TIF")) %>%
+## df with all files and dates
+waterInput_df <- data.frame("rast35" = list.files(path35, pattern="UnmixedMask85"),
+                            "mask35" = list.files(path35, pattern = "QA_PIXEL"),
+                            "rast36" = list.files(path36, pattern="UnmixedMask85"),
+                            "mask36" = list.files(path36, pattern="QA_PIXEL")) %>%
   ## extract date from r35
-  mutate(dates(rast35))
+  mutate(dates(rast35),
+         date = as.character(date))
 
-
-## Need same crs for zonal stats.
-## Easier to transform vector than the high-res raster
-r <- rast(paste0(path35, waterInput_df[1,1]))
-kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>%
-  project(y = crs(r))
-
-## Function to perform zonal stats and output results
-waterStats <- function(rast35, mask35, rast36, mask36, zip_vect, dates) {
-  
+## Fxn to mask, merge, then export for each date
+waterMerge <- function(rast35, mask35, rast36, mask36, date, pathOut) {
   ## raster and mask for row 35 -------------  
   r35 <- rast(paste0(path35, rast35))
   names(r35) <- "rast"
@@ -190,7 +184,48 @@ waterStats <- function(rast35, mask35, rast36, mask36, zip_vect, dates) {
   s <- sprc(r_masked35, r_masked36)
   m <- merge(s)
  
-  zonalStat <- terra::zonal(m, zip_vect, fun = 'sum', na.rm = TRUE)
+  terra::writeRaster(m, filename = paste0(pathOut, "p42_merged_", date, ".tif"))
+}
+
+pmap(waterInput_df, waterMerge, 
+     pathOut = here("data/water/p042_masked_merged/2022//"), 
+     .progress = TRUE)
+```
+
+
+#### Zonal stats
+Here we determine how much standing water is present within each zip code. This information will be exported as a .csv and used for the Shiny app. To do this, we'll need to first ensure that our `kern_zips.shp` are the same crs as the water rasters. Then we'll use a function to loop through all the water rasters within a given directory.
+```{r}
+## Create paths for water rasters and masks
+pathIn <- here('data/water/p042_masked_merged/2022//')
+
+## Fxn to get dates
+dates <- function(files) {
+  str_split(files, "_", simplify = TRUE) %>% 
+  as.data.frame() %>%
+  mutate(date = lubridate::ymd(V3)) %>%
+  dplyr::select(date)
+}
+
+## One df with all files and dates
+df <- data.frame("rasts" = list.files(pathIn, pattern=".tif")) %>% 
+  ## extract date from r35
+  mutate(dates(rasts),
+         rasts = paste0(pathIn, rasts))
+
+
+## Need same crs for zonal stats.
+## Easier to transform vector than the high-res raster
+r <- rast(df$rasts[1])
+kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>%
+  project(y = crs(r))
+
+## Function to perform zonal stats and output results
+waterStats <- function(rasts, zip_vect, date) {
+  
+  r = terra::rast(rasts)
+ 
+  zonalStat <- terra::zonal(r, zip_vect, fun = 'sum', na.rm = TRUE)
   
   zonalStat_df <- zonalStat %>%
     ## assign values with corresponding zipcode
@@ -201,15 +236,49 @@ waterStats <- function(rast35, mask35, rast36, mask36, zip_vect, dates) {
     rename(water_cells = "rast") %>%
     mutate(water_acres = water_cells * 900 / 4046.86) %>%
     ## finally, add date image was taken
-    mutate(date = dates)
-
+    mutate(date = date)
 }
 
 ## Run fxn over list w/pmap
-waterStats_df <- pmap_dfr(waterInput_df, waterStats, zip_vect = kern_zips, .progress = TRUE)
+waterStats_df <- pmap_dfr(df, waterStats, zip_vect = kern_zips, .progress = TRUE)
 
 ## export as .csv
-write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
+write_csv(waterStats_df, here('data/water/water_acre_zipcode_2022.csv'))
+```
+
+
+
+
+```{r}
+## To stack for gif, need the same extent.
+## Each image slightly different bc of satellite path.
+## Merge all the p42 rasts to find overall extent, then use to crop
+rasts = list.files(here("data/water/masked_merged/"),
+                   pattern = "p42_merged_",
+                   full.names = T)
+
+for (i in 1:length(rasts)) {
+  r = rast(rasts[i])
+  assign(paste0("rast", i), r)
+}
+
+s <- sprc(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
+          rast8, rast9, rast10, rast11, rast12, rast12, rast14)
+m <- merge(s)
+
+for (i in 1:length(rasts)) {
+  r = rast(rasts[i])
+  resamp <- resample(r, m)
+  assign(paste0("rast", i), resamp)
+}
+
+
+stack = c(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
+          rast8, rast9, rast10, rast11, rast12, rast12, rast14)
+
+writeRaster(stack, here("data/water/masked_merged/p42_merged_stack.tif"))
+
+
 ```
 
 Water rasters for gif. Must be same extent, resolution, and number of rows/columns. First we'll merged and export all the path42 rasters by date. Then, we'll read in these new rasters and merge them to determine the extent that they all should have in common. Finally, we'll change the extent of each raster to that of the merged, stack it, and save.

@@ -7,7 +7,6 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library()
 library(tidyverse)    ## always
 library(here)         ## consistent file paths
 library(stringr)      ## split up file names
@@ -113,6 +112,29 @@ writeVector(valley, here('data/central_valley/valley.shp'), overwrite = T)
 
 
 ### Standing water
+
+#### Convert to .tif
+First we need to deal with format of the 2022 Landsat rasters. These are unmarked files types (no file extension) paired with an .hdr file. The unmarked file can only be read with the .hdr file present of the same name. This will make future steps of reading in layers tricky, so first we'll convert all these files to .tif format and remove the original file pairings. 
+```{r}
+convert_tif = function(path) {
+  ## List the non .hdr files (can't be read in)
+  list <- grep(list.files(path), pattern = ".hdr", invert = TRUE, value = TRUE)
+  
+  ## Read in and save as .tif
+  for (i in 1:length(list)) {
+    r = rast(paste0(path, list[i]))
+    writeRaster(r, paste0(path,list[i],".tif"), overwrite = T)
+  }
+  
+  ## List and remove original non .tif files
+  nontifs <- grep(list.files(path, full.names = TRUE), 
+                  pattern = ".tif", invert = TRUE, value = TRUE)
+  file.remove(nontifs)
+}
+
+convert_tif(path = here("data/water/Landsat_Dan/p042r035/2022//"))
+
+```
 
 Here we'll run zonal stats to determine how much standing water is present in each zip code. This information will be exported as a .csv and used for the Shiny app. To do this, we'll need to first ensure that our `kern_zips.shp` are the same crs as the water rasters. Then we'll use a function to loop through all the water rasters within the directory.
 ```{r}

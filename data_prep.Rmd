@@ -8,6 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)    ## always
+library(zoo)          ## interpolation
 library(here)         ## consistent file paths
 library(stringr)      ## split up file names
 library(lubridate)    ## mutate dates
@@ -194,185 +195,132 @@ pmap(waterInput_df, waterMerge,
 
 
 #### Zonal stats
-Here we determine how much standing water is present within each zip code. This information will be exported as a .csv and used for the Shiny app. To do this, we'll need to first ensure that our `kern_zips.shp` are the same crs as the water rasters. Then we'll use a function to loop through all the water rasters within a given directory.
+Here we determine how much standing water is present within each zip code for each image date. The larger `waterZonal()` fxn (which contains several more fxns inside) reads in our rasters and vector of interest, reprojects where needed, and iterates the zonal function over all the rasters in a given directory. We'll run this fxn for 2023 and 2022 rasters, then merge the results and export a single .csv.
 ```{r}
-## Create paths for water rasters and masks
-pathIn <- here('data/water/p042_masked_merged/2022//')
 
-## Fxn to get dates
-dates <- function(files) {
-  str_split(files, "_", simplify = TRUE) %>% 
-  as.data.frame() %>%
-  mutate(date = lubridate::ymd(V3)) %>%
-  dplyr::select(date)
-}
+waterZonal <- function(rastPath, vect) {
+    ## Fxn to get dates
+    dates <- function(files) {
+      str_split(files, "_", simplify = TRUE) %>% 
+      as.data.frame() %>%
+      mutate(date = lubridate::ymd(V3)) %>%
+      dplyr::select(date)
+    }
+    
+    ## One df with all files and dates
+    df <- data.frame("rasts" = list.files(rastPath, pattern="merged")) %>% 
+      ## extract date from r35
+      mutate(dates(rasts),
+             rasts = paste0(rastPath, rasts))
+    
+    ## Need same crs for zonal stats.
+    ## Easier to transform vector than the high-res raster
+    r <- rast(df$rasts[1])
+    vect <- project(vect, y = crs(r))
+    
+    ## Fxn to perform zonal stats and output results
+    zonalFxn <- function(rasts, vect, date) {
+      r = terra::rast(rasts)
+      zonalStat <- terra::zonal(r, vect, fun = 'sum', na.rm = TRUE)
+      zonalStat_df <- zonalStat %>%
+        ## assign values with corresponding zipcode
+        mutate(zipcode = vect$zipcode, .before = 1) %>%
+        ## convert values from # of pixels to acres
+        ## w/30m resolution, each pixel is 900 m^2
+        ## 4046.86 m^2 are in one acre
+        rename(ncells = "rast") %>%
+        mutate(acres = ncells * 900 / 4046.86) %>%
+        ## finally, add date image was taken
+        mutate(date = date)
+    }
+    
+    ## Run fxn over list w/pmap
+    waterStats_df <- pmap_dfr(df, zonalFxn, vect=vect, 
+                              .progress = TRUE)
+    
+} ##END FXN
 
-## One df with all files and dates
-df <- data.frame("rasts" = list.files(pathIn, pattern=".tif")) %>% 
-  ## extract date from r35
-  mutate(dates(rasts),
-         rasts = paste0(pathIn, rasts))
+## Paths for water rasters and zipcode vector
+path23 <- here('data/water/p042_masked_merged/2023//')
+path22 <- here('data/water/p042_masked_merged/2022//')
+vect <- vect(here("data/zipcodes/kern_zips.shp"))
 
-
-## Need same crs for zonal stats.
-## Easier to transform vector than the high-res raster
-r <- rast(df$rasts[1])
-kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>%
-  project(y = crs(r))
-
-## Function to perform zonal stats and output results
-waterStats <- function(rasts, zip_vect, date) {
-  
-  r = terra::rast(rasts)
- 
-  zonalStat <- terra::zonal(r, zip_vect, fun = 'sum', na.rm = TRUE)
-  
-  zonalStat_df <- zonalStat %>%
-    ## assign values with corresponding zipcode
-    mutate(zipcode = zip_vect$zipcode, .before = 1) %>%
-    ## convert values from # of pixels to acres
-    ## w/30m resolution, each pixel is 900 m^2
-    ## 4046.86 m^2 are in one acre
-    rename(water_cells = "rast") %>%
-    mutate(water_acres = water_cells * 900 / 4046.86) %>%
-    ## finally, add date image was taken
-    mutate(date = date)
-}
-
-## Run fxn over list w/pmap
-waterStats_df <- pmap_dfr(df, waterStats, zip_vect = kern_zips, .progress = TRUE)
+## Run fxn for 2023 and 2022 and bind results to one df
+waterStats_df = rbind(waterZonal(rastPath=path23, vect=vect),
+                      waterZonal(rastPath=path22, vect=vect))
 
 ## export as .csv
-write_csv(waterStats_df, here('data/water/water_acre_zipcode_2022.csv'))
+write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
+```
+
+There are some cloud issues with masking for standing water. The values for select dates will be replaced by an averaged value from the date prior and following.
+```{r}
+waterStats_df = read_csv(here("data/water/water_acre_zipcode.csv"))
+
+water_int_df = waterStats_df %>% 
+  group_by(zipcode) %>% 
+  ## For three dates, just avg values directly before/after
+  mutate(acres_int = case_when(date %in% c("2023-04-22",
+                                           "2023-06-09",
+                                           "2023-07-03") 
+                               ~((lead(acres, n = 1)+lag(acres, n = 1))/2),
+                               ## B/c these dates are sequential, replace w/NA then interpolate
+                               date %in% c("2023-05-08",
+                                           "2023-05-16") 
+                               ~NA,
+                               .default = acres)) %>% 
+  mutate(acres_int = na.approx(acres_int)) %>% 
+  mutate(ncells_int = case_when(date %in% c("2023-04-22",
+                                           "2023-06-09",
+                                           "2023-07-03") 
+                                ~(round(((lead(ncells, n = 1)+lag(ncells, n = 1))/2),0)),
+                               ## B/c these dates are sequential, replace w/NA then interpolate
+                               date %in% c("2023-05-08",
+                                           "2023-05-16") 
+                               ~NA,
+                               .default = ncells)) %>%   
+  mutate(ncells_int = round(na.approx(ncells_int),0))
+
+write_csv(water_int_df, here("data/water/water_acre_zipcode.csv"))
+
 ```
 
 
-
+#### Water GIF
+To stack for a .gif, rasters must be same extent, resolution, and number of rows/columns. First we'll merge path42 rasters by year to determine the common extent between all. Then, each raster will be resampled to have this identical extent, stacked, and saved.
 
 ```{r}
 ## To stack for gif, need the same extent.
 ## Each image slightly different bc of satellite path.
 ## Merge all the p42 rasts to find overall extent, then use to crop
-rasts = list.files(here("data/water/masked_merged/"),
+rasts = list.files(here("data/water/p042_masked_merged/2022"),
                    pattern = "p42_merged_",
                    full.names = T)
 
+## Read in every raster and merge them
 for (i in 1:length(rasts)) {
   r = rast(rasts[i])
   assign(paste0("rast", i), r)
 }
-
 s <- sprc(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
-          rast8, rast9, rast10, rast11, rast12, rast12, rast14)
+          rast8, rast9, rast10, rast11, rast12, rast13, rast14)
 m <- merge(s)
 
+## Now change the extent of every raster to that of the merged one
 for (i in 1:length(rasts)) {
   r = rast(rasts[i])
   resamp <- resample(r, m)
   assign(paste0("rast", i), resamp)
 }
 
-
+## Stack and export
 stack = c(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
-          rast8, rast9, rast10, rast11, rast12, rast12, rast14)
+          rast8, rast9, rast10, rast11, rast12, rast13, rast14)
 
-writeRaster(stack, here("data/water/masked_merged/p42_merged_stack.tif"))
+writeRaster(stack, here("data/water/p042_masked_merged/p42_2022_stack.tif"))
 
 
 ```
-
-Water rasters for gif. Must be same extent, resolution, and number of rows/columns. First we'll merged and export all the path42 rasters by date. Then, we'll read in these new rasters and merge them to determine the extent that they all should have in common. Finally, we'll change the extent of each raster to that of the merged, stack it, and save.
-```{r}
-## Create paths for water rasters and masks
-path35 <- here('data/water/Landsat_Dan/p042r035//')
-path36 <- here('data/water/Landsat_Dan/p042r036//')
-
-## Extract dates for each based on LANDSAT naming convention
-dates <- function(files) {
-  str_split(files, "_", simplify = TRUE) %>% 
-  as.data.frame() %>%
-  mutate(date = lubridate::ymd(V4)) %>%
-  dplyr::select(date)
-}
-
-## One df with all files and dates
-waterInput_df <- data.frame("rast35" = list.files(path35, 
-                                                  pattern="_T.TIF"),
-                            "mask35" = list.files(path35, 
-                                                  pattern = "QA_PIXEL.TIF"),
-                            "rast36" = list.files(path36, 
-                                                  pattern="_T.TIF"),
-                            "mask36" = list.files(path36,
-                                                  pattern="QA_PIXEL.TIF")) %>%
-  ## extract date from r35
-  mutate(dates(rast35))
-
-## Function to perform zonal stats and output results
-waterMerge <- function(rast35, mask35, rast36, mask36, date) {
-  
-  ## raster and mask for row 35 -------------  
-  r35 <- rast(paste0(path35, rast35))
-  names(r35) <- "rast"
-  m35 <- rast(paste0(path35, mask35))
-  ## mask values of 1 are NA
-  m35[m35 == 1] <- NA
-  ## mask raster 35
-  r_masked35 <- terra::mask(r35, m35)
- 
-  ## raster and mask for row 36 ---------------
-  r36 <- rast(paste0(path36, rast36))
-  names(r36) <- "rast"
-  m36 <- rast(paste0(path36, mask36))
-  ## mask values of 1 are NA
-  m36[m36 == 1] <- NA
-  ## mask raster 36
-  r_masked36 <- terra::mask(r36, m36)
- 
-  ## merge rasts using SpatRastCollection
-  s <- sprc(r_masked35, r_masked36)
-  m <- merge(s)
-  
-  # assign(paste0("rast", date), m)
-  
-  writeRaster(m, paste0(here("data/water/masked_merged//"), "p42_merged_", date, ".tif"))
-}
-
-## Run fxn over df of variables
-pmap(waterInput_df, waterMerge, .progress = TRUE)
-
-
-## To stack for gif, need the same extent.
-## Each image slightly different bc of satellite path.
-## Merge all the p42 rasts to find overall extent, then use to crop
-rasts = list.files(here("data/water/masked_merged/"),
-                   pattern = "p42_merged_",
-                   full.names = T)
-
-for (i in 1:length(rasts)) {
-  r = rast(rasts[i])
-  assign(paste0("rast", i), r)
-}
-
-s <- sprc(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
-          rast8, rast9, rast10, rast11, rast12, rast12, rast14)
-m <- merge(s)
-
-for (i in 1:length(rasts)) {
-  r = rast(rasts[i])
-  resamp <- resample(r, m)
-  assign(paste0("rast", i), resamp)
-}
-
-
-stack = c(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
-          rast8, rast9, rast10, rast11, rast12, rast12, rast14)
-
-writeRaster(stack, here("data/water/masked_merged/p42_merged_stack.tif"))
-
-test = raster::stack(here("data/water/masked_merged/p42_merged_stack.tif"))
-raster::animate(test)
-```
-
 
 test animated plot
 ```{r}

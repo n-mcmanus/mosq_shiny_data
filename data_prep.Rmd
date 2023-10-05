@@ -138,8 +138,11 @@ convert_tif(path = here("data/water/Landsat_Dan/p042r035/2022//"))
 ```
 
 #### Merge images
-Our AOI is split between two Landsat images (rows 35 and row 36 within path 42). First we'll merge and export them by each date. Then, we'll merge these new rasters and merge them all to determine a common extent. Finally, we'll change the extent of each raster to that of the merged, stack it, and save for use as gif in shiny.
+Our AOI is split between two Landsat images (rows 35 and row 36 within path 42). First we'll merge them by date, reproject to the crs for Leaflet, and crop to Kern county. 
 ```{r}
+## kern county
+kern <- vect(here("data/counties_ca/kern.shp"))
+
 ## Create paths for water rasters and masks
 path35 <- here('data/water/Landsat_Dan/p042r035/2022//')
 path36 <- here('data/water/Landsat_Dan/p042r036/2022//')
@@ -162,7 +165,7 @@ waterInput_df <- data.frame("rast35" = list.files(path35, pattern="UnmixedMask85
          date = as.character(date))
 
 ## Fxn to mask, merge, then export for each date
-waterMerge <- function(rast35, mask35, rast36, mask36, date, pathOut) {
+waterMerge <- function(rast35, mask35, rast36, mask36, date, kern, pathOut) {
   ## raster and mask for row 35 -------------  
   r35 <- rast(paste0(path35, rast35))
   names(r35) <- "rast"
@@ -184,11 +187,18 @@ waterMerge <- function(rast35, mask35, rast36, mask36, date, pathOut) {
   ## merge rasts using SpatRastCollection
   s <- sprc(r_masked35, r_masked36)
   m <- merge(s)
+  
+
+  ## reproject kern to crs of raster bc faster
+  kern_reproj = project(kern, y = crs(m))
+  ## crop merged rast to kern county
+  m_kern = crop(m, kern_reproj)
  
-  terra::writeRaster(m, filename = paste0(pathOut, "p42_merged_", date, ".tif"))
+  terra::writeRaster(m_kern, filename = paste0(pathOut, "p42_kern_", date, ".tif"))
 }
 
-pmap(waterInput_df, waterMerge, 
+## Run fxn for all files in directory
+pmap(waterInput_df, waterMerge, kern=kern,
      pathOut = here("data/water/p042_masked_merged/2022//"), 
      .progress = TRUE)
 ```
@@ -197,7 +207,6 @@ pmap(waterInput_df, waterMerge,
 #### Zonal stats
 Here we determine how much standing water is present within each zip code for each image date. The larger `waterZonal()` fxn (which contains several more fxns inside) reads in our rasters and vector of interest, reprojects where needed, and iterates the zonal function over all the rasters in a given directory. We'll run this fxn for 2023 and 2022 rasters, then merge the results and export a single .csv.
 ```{r}
-
 waterZonal <- function(rastPath, vect) {
     ## Fxn to get dates
     dates <- function(files) {
@@ -208,7 +217,7 @@ waterZonal <- function(rastPath, vect) {
     }
     
     ## One df with all files and dates
-    df <- data.frame("rasts" = list.files(rastPath, pattern="merged")) %>% 
+    df <- data.frame("rasts" = list.files(rastPath, pattern="kern")) %>% 
       ## extract date from r35
       mutate(dates(rasts),
              rasts = paste0(rastPath, rasts))
@@ -293,8 +302,8 @@ To stack for a .gif, rasters must be same extent, resolution, and number of rows
 ## To stack for gif, need the same extent.
 ## Each image slightly different bc of satellite path.
 ## Merge all the p42 rasts to find overall extent, then use to crop
-rasts = list.files(here("data/water/p042_masked_merged/2022"),
-                   pattern = "p42_merged_",
+rasts = list.files(here("data/water/p042_masked_merged/2023"),
+                   pattern = "kern",
                    full.names = T)
 
 ## Read in every raster and merge them
@@ -302,14 +311,23 @@ for (i in 1:length(rasts)) {
   r = rast(rasts[i])
   assign(paste0("rast", i), r)
 }
+## create rast collection
 s <- sprc(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
           rast8, rast9, rast10, rast11, rast12, rast13, rast14)
-m <- merge(s)
+## merge rast collection, then reproj to leaflet crs
+m <- merge(s) %>% 
+  project(y = crs("epsg:900913"))
+## read in Kern shp
+kern <- vect(here("data/counties_ca/kern.shp")) %>% 
+  project(y = crs(m))
 
 ## Now change the extent of every raster to that of the merged one
+## and make all 0 values NA (transparent for leaflet map)
 for (i in 1:length(rasts)) {
-  r = rast(rasts[i])
-  resamp <- resample(r, m)
+  r = rast(rasts[i]) %>% 
+    project(y = crs(m))
+  resamp <- resample(r, m, method="near")
+  values(resamp)[values(resamp) < 1] <- NA
   assign(paste0("rast", i), resamp)
 }
 
@@ -317,16 +335,26 @@ for (i in 1:length(rasts)) {
 stack = c(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
           rast8, rast9, rast10, rast11, rast12, rast13, rast14)
 
-writeRaster(stack, here("data/water/p042_masked_merged/p42_2022_stack.tif"))
-
-
+writeRaster(stack, here("data/water/p042_masked_merged/p42_2023_stack.tif"),
+            overwrite = TRUE)
 ```
 
 test animated plot
 ```{r}
-water <- list.files(path = here("data/water/Landsat_Dan//"),
-                    full.names = T)
-waterRast <- raster::stack(water)
+
+r = stack(here("data/water/p042_masked_merged/p42_2023_stack.tif"))
+r1 = r$rast.1
+
+
+
+library(webshot)
+library(htmltools)
+library(leaflet)
+
+leaflet() %>% 
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addRasterImage(r1_crs, colors = "dodgerblue4", project =F)
+
 
 
 ```

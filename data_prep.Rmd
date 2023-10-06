@@ -299,21 +299,32 @@ write_csv(water_int_df, here("data/water/water_acre_zipcode.csv"))
 To stack for a .gif, rasters must be same extent, resolution, and number of rows/columns. First we'll merge path42 rasters by year to determine the common extent between all. Then, each raster will be resampled to have this identical extent, stacked, and saved.
 
 ```{r}
-## To stack for gif, need the same extent.
-## Each image slightly different bc of satellite path.
-## Merge all the p42 rasts to find overall extent, then use to crop
-rasts = list.files(here("data/water/p042_masked_merged/2023"),
-                   pattern = "kern",
-                   full.names = T)
+pathIn = here("data/water/p042_masked_merged/2023//")
 
-## Read in every raster and merge them
-for (i in 1:length(rasts)) {
-  r = rast(rasts[i])
+dates <- function(files) {
+      str_split(files, "_", simplify = TRUE) %>% 
+      as.data.frame() %>%
+      mutate(date = lubridate::ymd(V3)) %>%
+      dplyr::select(date)
+ }
+
+df = data.frame(rasts = list.files(pathIn, pattern="kern", full.names=FALSE)) %>%
+  ## Add dates, then remove select rasters based on them
+  mutate(dates(rasts),
+         rasts = paste0(pathIn, rasts)) %>%  
+  filter(!date %in% c("2023-04-22","2023-05-08","2023-05-16",
+                      "2023-06-09","2023-07-03")) %>% 
+  mutate(date = gsub("-", "_", date))
+
+
+for (i in 1:nrow(df)) {
+  r = rast(df$rasts[i])
   assign(paste0("rast", i), r)
 }
+
 ## create rast collection
-s <- sprc(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
-          rast8, rast9, rast10, rast11, rast12, rast13, rast14)
+s <- sprc(rast1, rast2, rast3, rast4, rast5,
+          rast6, rast7, rast8, rast9)
 ## merge rast collection, then reproj to leaflet crs
 m <- merge(s) %>% 
   project(y = crs("epsg:900913"))
@@ -323,17 +334,18 @@ kern <- vect(here("data/counties_ca/kern.shp")) %>%
 
 ## Now change the extent of every raster to that of the merged one
 ## and make all 0 values NA (transparent for leaflet map)
-for (i in 1:length(rasts)) {
-  r = rast(rasts[i]) %>% 
+for (i in 1:nrow(df)) {
+  r = rast(df$rasts[i]) %>% 
     project(y = crs(m))
+  names(r) = paste0("rast_", df$date[i])
   resamp <- resample(r, m, method="near")
   values(resamp)[values(resamp) < 1] <- NA
   assign(paste0("rast", i), resamp)
 }
 
 ## Stack and export
-stack = c(rast1, rast2, rast3, rast4, rast5, rast6, rast7,
-          rast8, rast9, rast10, rast11, rast12, rast13, rast14)
+stack = c(rast1, rast2, rast3, rast4, rast5,
+          rast6, rast7, rast8, rast9)
 
 writeRaster(stack, here("data/water/p042_masked_merged/p42_2023_stack.tif"),
             overwrite = TRUE)

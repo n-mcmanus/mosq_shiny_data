@@ -67,8 +67,478 @@ function(input, output, session) {
       updateNavbarPage(session, "nav", selected = "tab4")
     }
   })
+  
+  
+  # TAB 1 - Trap Data ##########################################################
+  
+  ## RESPONSIVE SIDE PANEL WIDGETS --------------------
+  
+  ### Zip code box ----------------
+  ## React to user input and slightly delay response
+  zipcodeTrap <- reactive(input$zip_box_trap)
+  zipcodeTrap_d <- debounce(zipcodeTrap, millis = 1500)
+  
+  ## Validation text below zip box
+  ivTrap <- InputValidator$new()
+  ### Must be 5 numbers
+  ivTrap$add_rule("zip_box_trap", function(length) {
+    length = nchar(zipcodeTrap_d())
+    if (length !=5 & length != 0) {
+      "Only 5-character entries are permitted."
+    }
+  })
+  ### Must be zip in Kern
+  ivTrap$add_rule("zip_box_trap", function(zipcodeTrap_d) {
+    if (!(zipcodeTrap_d() %in% zips_sf$zipcode) & nchar(zipcodeTrap_d()) != 0) {
+      "Please enter a valid zip code."
+    } 
+  })
+  ivTrap$enable()
+  
+  
+  ### Trap date selection ----------------
+  observe({
+    if (input$trapMonth == "none" & input$trapYear == "2023") {
+      updateDateRangeInput(session, "trap_dateRange",
+                           start = paste(input$trapYear, "01-01", sep = "-"),
+                           end = paste(input$trapYear, "07-31", sep = "-"))
+    } else if (input$trapMonth == "none") {
+      updateDateRangeInput(session, "trap_dateRange",
+                           start = paste(input$trapYear, "01-01", sep = "-"),
+                           end = paste(input$trapYear, "12-31", sep = "-"))
+    } else {
+      updateDateRangeInput(session, "trap_dateRange",
+                           start = paste(input$trapYear, input$trapMonth, "01", sep = "-"),
+                           end = paste(input$trapYear, input$trapMonth, "31", sep = "-"))
+    }
+  })  
+  
+  
+  # ## Trap month box
+  # output$trapMonth <- renderUI({
+  #   if (input$trapTime != "monthly") {
+  #     return(NULL)
+  #   } else {
+  #     selectInput("trapMonth", label = "Select month:",
+  #                 choices = list("March" = 3,
+  #                                "April" = 4,
+  #                                "May" = 5,
+  #                                "June" = 6,
+  #                                "July" = 7,
+  #                                "August" = 8,
+  #                                "September" = 9,
+  #                                "October" = 10,
+  #                                "November" = 11),
+  #                 selected = 8)
+  #   }
+  # })
+  
+  # ### Custom date range
+  # output$trap_dateRange <- renderUI({
+  #   if (input$trapTime != "custom") {
+  #     return(NULL)
+  #   } else {
+  #     dateRangeInput("trap_dateRange", 
+  #                    label = "Date range:",
+  #                    start = "2023-01-01",
+  #                    end = "2023-07-31")
+  #   }
+  # })
+  
+  ## TRAP MAP ------------------------------------------------------------
+  output$trapMap <- renderLeaflet({
+    leaflet() %>% 
+      ## Add background maps
+      addTiles(group = "OpenStreetMaps") %>% 
+      addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
+      
+      ### Zip codes
+      addPolygons(data = zips_sf, color = "#343434",
+                  weight = 2, fillOpacity = 0.1,
+                  label = paste0("Zip code: ", zips_sf$zipcode),
+                  labelOptions = labelOptions(textsize = "11px"),
+                  highlight = highlightOptions(weight = 5,
+                                               color = "white",
+                                               bringToFront = TRUE),
+                  group = "Zip codes",
+                  layerId = ~zipcode) %>%  
+      
+      ### Kern county
+      addPolylines(data = kern_sf,
+                   color = 'black', weight = 4, fillOpacity = 0,
+                   group = "Kern county") %>% 
+      
+      ### Central valley
+      addPolylines(data = valley_sf,
+                   color = 'blue', weight = 3, fillOpacity = 0,
+                   group = "Central Valley") %>% 
+      
+      ## Create map groups
+      addLayersControl(
+        baseGroups = c("OpenStreetMaps", "World Imagery"),
+        overlayGroups = c("Zip codes", "Kern county", "Central Valley"),
+        options = layersControlOptions(collapsed = TRUE),
+        position = "topleft") %>% 
+      
+      ## Don't show all layers by default
+      hideGroup(c("Kern county")) %>% 
+      
+      ## Add map inset
+      addMiniMap(
+        tiles = providers$Esri.WorldStreetMap,
+        zoomLevelOffset = -5,
+        position = 'bottomright',
+        toggleDisplay = TRUE) %>% 
+      
+      ## Add legend 
+      # addLegend(pal = pal, values = values(wnv_trans),
+      #           position = "topleft",
+      #           title = "WNV Transmission </br> Efficiency") %>% 
+      setView(-119.2, 35.38, zoom = 9)
+  }) ## END LEAFLET
+  
+  
+  ### Interactive Leaflet elements: 
+  ## Click on zip code polygon to input value in text box
+  observe({
+    event <- input$trapMap_shape_click
+    if(is.null(event$id))
+      return()
+    
+    ## change text box value
+    updateTextInput(session, 
+                    inputId = "zip_box_trap", 
+                    value = event$id)
+  })
+  
+  ## Zoom and highlight zip code
+  observe({
+    ## establish zip code boundaries
+    geom <- zips_sf %>%
+      dplyr::filter(zipcode == input$zip_box_trap)
+    bounds <- geom %>%
+      st_bbox() %>%
+      as.character()
+    
+    ## Update map
+    leafletProxy("trapMap") %>%
+      clearGroup("highlighted_polygon") %>%
+      ## zoom to zip
+      flyToBounds(lng1 = bounds[1], lat1 = bounds[2],
+                  lng2 = bounds[3], lat2 = bounds[4]) %>%
+      ## highlight selected zip
+      addPolylines(stroke=TRUE, weight = 5, color="yellow",
+                   fill = TRUE, fillColor = "white", fillOpacity = 0.4,
+                   data = geom, group = "highlighted_polygon")
+  })
+  
+  
+  ## Reactive caption for map
+  output$trapMap_caption <- renderText({
+    paste("<b>","Figure 1:","</b>","Interactive map of zip codes within the Central Valley and Kern County, California. The selected zip code is outline in yellow, and the border for the central valley is shown in blue. Borders for Kern County and the central valley can be toggled using the map options in the upper left corner.")
+  })
+  
+  
+  
+  ### Filter Trap Data ----------------------------------------------------
+  ## Abundance 
+  ### Filtered abundance by time and zip
+  abund_data <- reactive ({
+    df <- abund_df %>% 
+      filter(zipcode == zipcodeTrap_d(),
+             date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2]) %>% 
+      group_by(year, date) %>% 
+      summarize(cases = mean(mos_per_trap_night, na.rm = TRUE))
+    
+    return(df)
+  })
+  
+  ### Avg abund for zip (all time)
+  avgAbund_zip <- reactive ({
+    x <- abund_df %>% 
+      filter(zipcode == zipcodeTrap_d())
+    
+    xMean <- mean(x$mos_per_trap_night, na.rm = TRUE)
+    
+    return(xMean)
+  })
+  
+  ### Avg abund for time (all Kern)
+  avgAbund_kern <- reactive ({
+    x <- abund_df %>% 
+      filter(date >= input$trap_dateRange[1] & date <= input$trap_dateRange[2])
+    
+    xMean <- mean(x$mos_per_trap_night, na.rm = TRUE)
+    
+    return(xMean)
+  })
+  
+  
+  ## WNV MIR 
+  ### Filtered abundance by time and zip
+  wnv_data <- reactive ({
+    df <- wnv_df %>% 
+      filter(zipcode == zipcodeTrap_d(),
+             date >= input$trap_dateRange[1] & date <= input$trap_dateRange[2]) %>% 
+      group_by(year, date) %>% 
+      summarize(cases = mean(mir_all, na.rm = TRUE))
+    return(df)
+  })
+  
+  ### Avg MIR for zip (all time)
+  avgWnv_zip <- reactive ({
+    x <- wnv_df %>% 
+      filter(zipcode == zipcodeTrap_d())
+    
+    xMean <- mean(x$mir_all, na.rm = TRUE)
+    
+    return(xMean)
+  })
+  
+  ### Avg abund for time (all Kern)
+  avgWnv_kern <- reactive ({
+    x <- wnv_df %>% 
+      filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2])
+    
+    xMean <- mean(x$mir_all, na.rm = TRUE)
+    
+    return(xMean)
+  })
+  
+  
+  ### Plots ----------------------------------------------------
+  ## Abundance plot
+  output$abund_plot <- renderUI({
+    if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+      ## If no data, no plot
+    } else if (length(abund_data()$cases)==0) {
+      strong("No abundance data available for this location and time.")
+      ## If plotting under two months
+    } else if (difftime(input$trap_dateRange[2],
+                        input$trap_dateRange[1]) <= 62) {
+      renderPlot({
+        ggplot(data = abund_data(), aes(x = date, y = cases)) +
+          ## Kern avg (in time period):
+          geom_hline(yintercept = avgAbund_kern(),
+                     color = "black", linetype = "dashed", linewidth = 0.8) +
+          
+          ## Zip avg (all time):
+          geom_hline(yintercept = avgAbund_zip(),
+                     color = "purple", linetype = "dashed", linewidth = 0.8) +
+          ## Filtered zip/time data
+          geom_line(color = "seagreen4", linewidth = 0.8) +
+          geom_point(color = "seagreen3", size = 3, alpha = 0.8) +
+          labs(y = "Average weekly abundance",
+               x = element_blank()) +
+          scale_x_date(date_labels = "%d %b %y",
+                       breaks = unique(abund_data()$date)) +
+          theme_classic() +
+          theme(
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)) 
+      })
+      ## If plotting between 2 months to a year
+    } else if (difftime(input$trap_dateRange[2],
+                        input$trap_dateRange[1]) <= 365) {
+      renderPlot({
+        ggplot(data = abund_data(), aes(x = date, y = cases)) +
+          ## Kern avg (in time period):
+          geom_hline(yintercept = avgAbund_kern(),
+                     color = "black", linetype = "dashed", linewidth = 0.8) +
+          ## Zip avg (all time):
+          geom_hline(yintercept = avgAbund_zip(),
+                     color = "purple", linetype = "dashed", linewidth = 0.8) +
+          ## Filtered zip/time data
+          geom_line(color = "seagreen4", linewidth = 0.8) +
+          geom_point(color = "seagreen3", size = 3, alpha = 0.8) +
+          labs(y = "Average weekly abundance",
+               x = element_blank()) +
+          scale_x_date(date_labels = "%b %y",
+                       date_breaks = "1 month") +
+          theme_classic() +
+          theme(
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)) 
+      })
+      ## If plotting between a year and two years
+    } else if (difftime(input$trap_dateRange[2],
+                        input$trap_dateRange[1]) <= 730) {
+      renderPlot({
+        ggplot(data = abund_data(), aes(x = date, y = cases)) +
+          ## Kern avg (in time period):
+          geom_hline(yintercept = avgAbund_kern(),
+                     color = "black", linetype = "dashed", linewidth = 0.8) +
+          ## Zip avg (all time):
+          geom_hline(yintercept = avgAbund_zip(),
+                     color = "purple", linetype = "dashed", linewidth = 0.8) +
+          ## Filtered zip/time data
+          geom_line(color = "seagreen4", linewidth = 0.8) +
+          geom_point(color = "seagreen3", size = 2, alpha = 0.8) +
+          labs(y = "Average weekly abundance",
+               x = element_blank()) +
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "2 month") +
+          theme_classic() +
+          theme(
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)) 
+      })
+      ## If plot time is greater than two years
+    }  else {
+      renderPlot({
+        ggplot(data = abund_data(), aes(x = date, y = cases)) +
+          ## Kern avg (in time period):
+          geom_hline(yintercept = avgAbund_kern(),
+                     color = "black", linetype = "dashed", linewidth = 0.8) +
+          ## Zip avg (all time):
+          geom_hline(yintercept = avgAbund_zip(),
+                     color = "purple", linetype = "dashed", linewidth = 0.8) +
+          ## Filtered zip/time data
+          geom_line(color = "seagreen4", linewidth = 0.8) +
+          geom_point(color = "seagreen3", size = 1, alpha = 0.8) +
+          labs(y = "Average weekly abundance",
+               x = element_blank()) +
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "3 month") +
+          theme_classic() +
+          theme(
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)) 
+      })
+    }
+  })
+  
+  
+  ## WNV plot
+  output$wnv_plot <- renderUI({
+    if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else if (all(is.na(wnv_data()$cases))) {
+      strong("No infection data available for this location and time.")
+      ## If plot time is under two months
+    } else if (difftime(input$trap_dateRange[2],
+                        input$trap_dateRange[1]) <= 62) {
+      renderPlot({
+        ggplot(data = wnv_data(), aes(x = date, y = cases)) +
+          ## Filtered to zip/time
+          geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
+          ## Kern avg (in time period):
+          geom_hline(yintercept = avgWnv_kern(),
+                     color = "black", linetype = "dashed", linewidth = 0.8) +
+          ## Zip avg (all time):
+          geom_hline(yintercept = avgWnv_zip(),
+                     color = "purple", linetype = "dashed", linewidth = 0.8) +
+          labs(y = "Weekly MIR",
+               x = element_blank()) +
+          scale_x_date(date_labels = "%d %b %y")+
+          # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
+          theme_classic() +
+          theme(
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)) 
+      })
+      ## Plot time between two months to a year
+    } else if (difftime(input$trap_dateRange[2],
+                        input$trap_dateRange[1]) <= 365) {
+      renderPlot({
+        ggplot(data = wnv_data(), aes(x = date, y = cases)) +
+          ## Filtered to zip/time
+          geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
+          ## Kern avg (in time period):
+          geom_hline(yintercept = avgWnv_kern(),
+                     color = "black", linetype = "dashed", linewidth = 0.8) +
+          ## Zip avg (all time):
+          geom_hline(yintercept = avgWnv_zip(),
+                     color = "purple", linetype = "dashed", linewidth = 0.8) +
+          labs(y = "Average weekly MIR",
+               x = element_blank()) +
+          scale_x_date(date_labels = "%b %y",
+                       date_breaks = "1 month")+
+          # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
+          theme_classic() +
+          theme(
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)) 
+      })
+      ## Plot time between a year to two years
+    } else if (difftime(input$trap_dateRange[2],
+                        input$trap_dateRange[1]) <= 730) {
+      renderPlot({
+        ggplot(data = wnv_data(), aes(x = date, y = cases)) +
+          ## Filtered to zip/time
+          geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
+          ## Kern avg (in time period):
+          geom_hline(yintercept = avgWnv_kern(),
+                     color = "black", linetype = "dashed", linewidth = 0.8) +
+          ## Zip avg (all time):
+          geom_hline(yintercept = avgWnv_zip(),
+                     color = "purple", linetype = "dashed", linewidth = 0.8) +
+          labs(y = "Average weekly MIR",
+               x = element_blank()) +
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "2 month") +
+          # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
+          theme_classic() +
+          theme(
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)) 
+      })
+      ## Plot time over two years
+    } else {
+      renderPlot({
+        ggplot(data = wnv_data(), aes(x = date, y = cases)) +
+          ## Filtered to zip/time
+          geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
+          ## Kern avg (in time period):
+          geom_hline(yintercept = avgWnv_kern(),
+                     color = "black", linetype = "dashed", linewidth = 0.8) +
+          ## Zip avg (all time):
+          geom_hline(yintercept = avgWnv_zip(),
+                     color = "purple", linetype = "dashed", linewidth = 0.8) +
+          labs(y = "Average weekly MIR",
+               x = element_blank()) +
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "3 month") +
+          # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
+          theme_classic() +
+          theme(
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.title.x = element_text(vjust = -1, size = 14),
+            axis.text = element_text(size = 13)) 
+      })
+    }
+  })
+  
+  
+  ## Reactive captions for map
+  output$abundPlot_caption <- renderText({
+    ## If invalid zip, don't show text
+    if(!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else {
+      paste("<b>","Fig. 2A:","</b>","Average mosquito abundance within Kern County. The green line plot displays average weekly abundance within zip code ", zipcodeTrap_d(), " between ", input$trap_dateRange[1], " and ", input$trap_dateRange[2], ". The dashed black line represents the average mosquito abundance within this time period across all Kern zip codes, while the dashed purple line shows average abundance in zip code ", zipcodeTrap_d(), " from 2018 to present.")
+    }
+  })
+  
+  output$wnvPlot_caption <- renderText({
+    if(!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else {
+      paste("<b>","Fig. 2B:","</b>","WNV average minimum infection rate (MIR) within Kern County. The orange bar graph displays the average weekly MIR within zip code ", zipcodeTrap_d(), " between ", input$trap_dateRange[1], " and ", input$trap_dateRange[2], ". The dashed black line represents the average MIR within this time period across all Kern zip codes, while the dashed purple line shows average MIR in zip code ", zipcodeTrap_d(), " from 2018 to present.")
+    }
+  })
+  
+  
 
-  # TAB 1 - Interactive Map ##################################################
+  # TAB 2 - Interactive Map ##################################################
   
   ### PANEL ELEMENTS -----------------------------------------------------------
   
@@ -449,373 +919,6 @@ function(input, output, session) {
                    data = geom, group = "highlighted_polygon")
   })
 
-  # TAB 2 - Trap Data ##########################################################
-  
-  ## RESPONSIVE SIDE PANEL WIDGETS --------------------
-  
-  ### Zip code box ----------------
-    ## React to user input and slightly delay response
-    zipcodeTrap <- reactive(input$zip_box_trap)
-    zipcodeTrap_d <- debounce(zipcodeTrap, millis = 1500)
-    
-    ## Validation text below zip box
-    ivTrap <- InputValidator$new()
-    ### Must be 5 numbers
-    ivTrap$add_rule("zip_box_trap", function(length) {
-      length = nchar(zipcodeTrap_d())
-      if (length !=5 & length != 0) {
-        "Only 5-character entries are permitted."
-      }
-    })
-    ### Must be zip in Kern
-    ivTrap$add_rule("zip_box_trap", function(zipcodeTrap_d) {
-      if (!(zipcodeTrap_d() %in% zips_sf$zipcode) & nchar(zipcodeTrap_d()) != 0) {
-        "Please enter a valid zip code."
-      } 
-    })
-    ivTrap$enable()
-  
-
-  ### Trap date selection ----------------
-  observe({
-    if (input$trapMonth == "none" & input$trapYear == "2023") {
-      updateDateRangeInput(session, "trap_dateRange",
-                           start = paste(input$trapYear, "01-01", sep = "-"),
-                           end = paste(input$trapYear, "07-31", sep = "-"))
-    } else if (input$trapMonth == "none") {
-      updateDateRangeInput(session, "trap_dateRange",
-                           start = paste(input$trapYear, "01-01", sep = "-"),
-                           end = paste(input$trapYear, "12-31", sep = "-"))
-    } else {
-      updateDateRangeInput(session, "trap_dateRange",
-                           start = paste(input$trapYear, input$trapMonth, "01", sep = "-"),
-                           end = paste(input$trapYear, input$trapMonth, "31", sep = "-"))
-    }
-  })  
-    
-    
-  # ## Trap month box
-  # output$trapMonth <- renderUI({
-  #   if (input$trapTime != "monthly") {
-  #     return(NULL)
-  #   } else {
-  #     selectInput("trapMonth", label = "Select month:",
-  #                 choices = list("March" = 3,
-  #                                "April" = 4,
-  #                                "May" = 5,
-  #                                "June" = 6,
-  #                                "July" = 7,
-  #                                "August" = 8,
-  #                                "September" = 9,
-  #                                "October" = 10,
-  #                                "November" = 11),
-  #                 selected = 8)
-  #   }
-  # })
-  
-  # ### Custom date range
-  # output$trap_dateRange <- renderUI({
-  #   if (input$trapTime != "custom") {
-  #     return(NULL)
-  #   } else {
-  #     dateRangeInput("trap_dateRange", 
-  #                    label = "Date range:",
-  #                    start = "2023-01-01",
-  #                    end = "2023-07-31")
-  #   }
-  # })
-  
-  ## TRAP MAP ------------------------------------------------------------
-  output$trapMap <- renderLeaflet({
-    leaflet() %>% 
-      ## Add background maps
-      addTiles(group = "OpenStreetMaps") %>% 
-      addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
-  
-      ### Zip codes
-      addPolygons(data = zips_sf, color = "#343434",
-                  weight = 2, fillOpacity = 0.1,
-                  label = paste0("Zip code: ", zips_sf$zipcode),
-                  labelOptions = labelOptions(textsize = "11px"),
-                  highlight = highlightOptions(weight = 5,
-                                               color = "white",
-                                               bringToFront = TRUE),
-                  group = "Zip codes",
-                  layerId = ~zipcode) %>%  
-        
-        ### Kern county
-        addPolylines(data = kern_sf,
-                     color = 'black', weight = 4, fillOpacity = 0,
-                     group = "Kern county") %>% 
-        
-        ### Central valley
-        addPolylines(data = valley_sf,
-                     color = 'blue', weight = 3, fillOpacity = 0,
-                     group = "Central Valley") %>% 
-      
-        ## Create map groups
-        addLayersControl(
-          baseGroups = c("OpenStreetMaps", "World Imagery"),
-          overlayGroups = c("Zip codes", "Kern county", "Central Valley"),
-          options = layersControlOptions(collapsed = TRUE),
-          position = "topleft") %>% 
-          
-          ## Don't show all layers by default
-          hideGroup(c("Kern county")) %>% 
-          
-        ## Add map inset
-        addMiniMap(
-          tiles = providers$Esri.WorldStreetMap,
-          zoomLevelOffset = -5,
-          position = 'bottomright',
-          toggleDisplay = TRUE) %>% 
-          
-          ## Add legend 
-        # addLegend(pal = pal, values = values(wnv_trans),
-        #           position = "topleft",
-        #           title = "WNV Transmission </br> Efficiency") %>% 
-        setView(-119.2, 35.38, zoom = 9)
-  }) ## END LEAFLET
-  
-  
-  ### Interactive Leaflet elements: 
-  ## Click on zip code polygon to input value in text box
-  observe({
-    event <- input$trapMap_shape_click
-    if(is.null(event$id))
-      return()
-    
-    ## change text box value
-    updateTextInput(session, 
-                    inputId = "zip_box_trap", 
-                    value = event$id)
-  })
-  
-  ## Zoom and highlight zip code
-  observe({
-    ## establish zip code boundaries
-    geom <- zips_sf %>%
-      dplyr::filter(zipcode == input$zip_box_trap)
-    bounds <- geom %>%
-      st_bbox() %>%
-      as.character()
-    
-    ## Update map
-    leafletProxy("trapMap") %>%
-      clearGroup("highlighted_polygon") %>%
-      ## zoom to zip
-      flyToBounds(lng1 = bounds[1], lat1 = bounds[2],
-                  lng2 = bounds[3], lat2 = bounds[4]) %>%
-      ## highlight selected zip
-      addPolylines(stroke=TRUE, weight = 5, color="yellow",
-                   fill = TRUE, fillColor = "white", fillOpacity = 0.4,
-                   data = geom, group = "highlighted_polygon")
-  })
-  
-  
-  ## Reactive caption for map
-  output$trapMap_caption <- renderText({
-    paste("<b>","Figure 1:","</b>","Interactive map of zip codes within the Central Valley and Kern County, California. The selected zip code is outline in yellow, and the border for the central valley is shown in blue. Borders for Kern County and the central valley can be toggled using the map options in the upper left corner.")
-  })
-  
-  
-  
-  ### Filter Trap Data ----------------------------------------------------
-  ## Abundance 
-      ### Filtered abundance by time and zip
-        abund_data <- reactive ({
-            df <- abund_df %>% 
-              filter(zipcode == zipcodeTrap_d(),
-                     date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2]) %>% 
-              group_by(year, date) %>% 
-              summarize(cases = mean(mos_per_trap_night, na.rm = TRUE))
-            
-            return(df)
-        })
-    
-      ### Avg abund for zip (all time)
-      avgAbund_zip <- reactive ({
-        x <- abund_df %>% 
-          filter(zipcode == zipcodeTrap_d())
-        
-        xMean <- mean(x$mos_per_trap_night, na.rm = TRUE)
-        
-        return(xMean)
-      })
-    
-      ### Avg abund for time (all Kern)
-      avgAbund_kern <- reactive ({
-        x <- abund_df %>% 
-          filter(date >= input$trap_dateRange[1] & date <= input$trap_dateRange[2])
-        
-        xMean <- mean(x$mos_per_trap_night, na.rm = TRUE)
-        
-        return(xMean)
-      })
-
-    
-  ## WNV MIR 
-      ### Filtered abundance by time and zip
-       wnv_data <- reactive ({
-          df <- wnv_df %>% 
-            filter(zipcode == zipcodeTrap_d(),
-                   date >= input$trap_dateRange[1] & date <= input$trap_dateRange[2]) %>% 
-            group_by(year, date) %>% 
-            summarize(cases = mean(mir_all, na.rm = TRUE))
-          return(df)
-      })
-    
-       ### Avg MIR for zip (all time)
-       avgWnv_zip <- reactive ({
-         x <- wnv_df %>% 
-           filter(zipcode == zipcodeTrap_d())
-         
-         xMean <- mean(x$mir_all, na.rm = TRUE)
-         
-         return(xMean)
-       })
-       
-       ### Avg abund for time (all Kern)
-       avgWnv_kern <- reactive ({
-         x <- wnv_df %>% 
-           filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2])
-         
-         xMean <- mean(x$mir_all, na.rm = TRUE)
-         
-         return(xMean)
-       })
-  
- 
-  ### PLOT TRAP DATA ----------------------------------------------------
-  ## Abundance plot
-   output$abund_plot <- renderUI({
-     if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
-       return(NULL)
-       ## If no data, no plot
-     } else if (length(abund_data()$cases)==0) {
-       strong("No abundance data available for this location and time.")
-       ## If plotting under a month, change x-axis labels
-     } else if (difftime(input$trap_dateRange[2],
-                         input$trap_dateRange[1]) <= 62) {
-       renderPlot({
-         ggplot(data = abund_data(), aes(x = date, y = cases)) +
-           ## Kern avg (in time period):
-           geom_hline(yintercept = avgAbund_kern(),
-                      color = "black", linetype = "dashed", linewidth = 0.8) +
-           
-           ## Zip avg (all time):
-           geom_hline(yintercept = avgAbund_zip(),
-                      color = "purple", linetype = "dashed", linewidth = 0.8) +
-           ## Filtered zip/time data
-           geom_line(color = "seagreen4", linewidth = 0.8) +
-           geom_point(color = "seagreen3", size = 3, alpha = 0.8) +
-           labs(y = "Average weekly abundance",
-                x = element_blank()) +
-           scale_x_date(date_labels = "%d %b %y",
-                        breaks = unique(abund_data()$date)) +
-           theme_classic() +
-           theme(
-             axis.title.y = element_text(vjust = 2, size = 14),
-             axis.title.x = element_text(vjust = -1, size = 14),
-             axis.text = element_text(size = 13)) 
-       })
-     } else {
-       renderPlot({
-         ggplot(data = abund_data(), aes(x = date, y = cases)) +
-           ## Kern avg (in time period):
-           geom_hline(yintercept = avgAbund_kern(),
-                      color = "black", linetype = "dashed", linewidth = 0.8) +
-           ## Zip avg (all time):
-           geom_hline(yintercept = avgAbund_zip(),
-                      color = "purple", linetype = "dashed", linewidth = 0.8) +
-           ## Filtered zip/time data
-           geom_line(color = "seagreen4", linewidth = 0.8) +
-           geom_point(color = "seagreen3", size = 3, alpha = 0.8) +
-           labs(y = "Average weekly abundance",
-                x = element_blank()) +
-           scale_x_date(date_labels = "%b %y",
-                        date_breaks = "1 month") +
-           theme_classic() +
-           theme(
-             axis.title.y = element_text(vjust = 2, size = 14),
-             axis.title.x = element_text(vjust = -1, size = 14),
-             axis.text = element_text(size = 13)) 
-       })
-     }
-   })
-   
-   
-   ## WNV plot
-    output$wnv_plot <- renderUI({
-      if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
-        return(NULL)
-      } else if (all(is.na(wnv_data()$cases))) {
-        strong("No infection data available for this location and time.")
-      } else if (difftime(input$trap_dateRange[2],
-                          input$trap_dateRange[1]) <= 62) {
-        renderPlot({
-          ggplot(data = wnv_data(), aes(x = date, y = cases)) +
-            ## Filtered to zip/time
-            geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
-            ## Kern avg (in time period):
-            geom_hline(yintercept = avgWnv_kern(),
-                       color = "black", linetype = "dashed", linewidth = 0.8) +
-            ## Zip avg (all time):
-            geom_hline(yintercept = avgWnv_zip(),
-                       color = "purple", linetype = "dashed", linewidth = 0.8) +
-            labs(y = "Weekly MIR",
-                 x = element_blank()) +
-            scale_x_date(date_labels = "%d %b %y")+
-            # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
-            theme_classic() +
-            theme(
-              axis.title.y = element_text(vjust = 2, size = 14),
-              axis.title.x = element_text(vjust = -1, size = 14),
-              axis.text = element_text(size = 13)) 
-        })
-      } else {
-        renderPlot({
-          ggplot(data = wnv_data(), aes(x = date, y = cases)) +
-            ## Filtered to zip/time
-            geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
-            ## Kern avg (in time period):
-            geom_hline(yintercept = avgWnv_kern(),
-                       color = "black", linetype = "dashed", linewidth = 0.8) +
-            ## Zip avg (all time):
-            geom_hline(yintercept = avgWnv_zip(),
-                       color = "purple", linetype = "dashed", linewidth = 0.8) +
-            labs(y = "Average weekly MIR",
-                 x = element_blank()) +
-            scale_x_date(date_labels = "%b %y",
-                         date_breaks = "1 month")+
-            # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
-            theme_classic() +
-            theme(
-              axis.title.y = element_text(vjust = 2, size = 14),
-              axis.title.x = element_text(vjust = -1, size = 14),
-              axis.text = element_text(size = 13)) 
-        })
-      }
-    })
-    
-  
-    ## Reactive captions for map
-    output$abundPlot_caption <- renderText({
-      ## If invalid zip, don't show text
-      if(!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
-        return(NULL)
-      } else {
-      paste("<b>","Fig. 2A:","</b>","Average mosquito abundance within Kern County. The green line plot displays average weekly abundance within zip code ", zipcodeTrap_d(), " between ", input$trap_dateRange[1], " and ", input$trap_dateRange[2], ". The dashed black line represents the average mosquito abundance within this time period across all Kern zip codes, while the dashed purple line shows average abundance in zip code ", zipcodeTrap_d(), " from 2018 to present.")
-      }
-    })
-    
-    output$wnvPlot_caption <- renderText({
-      if(!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
-        return(NULL)
-      } else {
-      paste("<b>","Fig. 2B:","</b>","WNV average minimum infection rate (MIR) within Kern County. The orange bar graph displays the average weekly MIR within zip code ", zipcodeTrap_d(), " between ", input$trap_dateRange[1], " and ", input$trap_dateRange[2], ". The dashed black line represents the average MIR within this time period across all Kern zip codes, while the dashed purple line shows average MIR in zip code ", zipcodeTrap_d(), " from 2018 to present.")
-      }
-    })
   
   
 } ### END SERVER

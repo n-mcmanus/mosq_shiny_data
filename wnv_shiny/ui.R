@@ -7,62 +7,10 @@ library(leaflet)
 ## Top bar with title and tabs
 navbarPage(title = "WNV in Kern County", id = "nav",
            
-           
-    ## TAB 1: WNV Interactive Map ----------------------------------------------  
-    tabPanel("Risk Map",
-             id = "tab1",
-        div(class = "outer",
-            
-            ## Use custom CSS
-            tags$head(
-              includeCSS("styles.css")
-              ),
-            
-            
-            ## Interactive map
-            leafletOutput("map", width = "100%", height = "100%"),
-            
-            
-            ## Dragable panel on right
-            absolutePanel(id = "controls", class = "panel panel-default",
-                          fixed = TRUE, draggable = TRUE,
-                          top = 60, left = "auto", right = 20, bottom = "auto",
-                          width = 350, height = "auto",
-              
-              ## Zip code
-              textInput(inputId = "zip_box", label = h3("Zip code:"),
-                        value = NULL,
-                        placeholder = "Enter your zip code..."
-                        ),
-              hr(style = 'border-top: 1.5px solid #2d3e50'),
-              
-              ## Transmission risk text
-              htmlOutput("r0_header"),
-              htmlOutput("r0_value"),
-              htmlOutput("r0_line"),
-              
-              ## Temp plot
-              htmlOutput("temp_header"),
-              uiOutput("temp_dateRange"),
-              htmlOutput("tempDays_text"),
-              plotOutput("temp_plot", height = 180),
-              htmlOutput("temp_line"),
-              
-              ## Standing water plot
-              htmlOutput("water_header"),
-              plotOutput("water_plot", height = 170)
-              
-              
-        ) ## End panel
-            ),
-           ), ## END TAB 1
-    
-    
-    
-    
-    ## TAB 2: WNV TRAP CASES ---------------------------------------------------
+
+    ## TAB 1: WNV TRAP CASES ---------------------------------------------------
     tabPanel("Mosquito Data",
-             value = "tab2",
+             value = "tab1",
              h2("Mosquito Abundance and WNV"),
              p("Here will be info and copy about the data, such as: Mosquito abundance and WNV data comes from monitoring and testing efforts of the Kern Mosquito and Vector Control District. Copy on methodology: Traps are layed out and checked every 1-X days. These pools of trapped mosquitos are then tested for a range of mosquito-borne diseases. To standardize for monitoring effort, abundance and WNV cases are reported as mosquitos per trap night and minimum infection rate (MIR), respectively. For more details, click on the information icon in the navigation bar."),
              p("You can view information by zip code either by entering the zip code of interest on the left-hand panel, or by clicking on the zip code within the map on the right."),
@@ -139,13 +87,68 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                column(width = 6, uiOutput("wnv_plot"))
              ),
              fluidRow(
-               column(width = 6, style='padding-left:55px;', htmlOutput("abundPlot_caption")),
-               column(width = 6, style='padding-left:55px;', htmlOutput("wnvPlot_caption"))
+               column(width = 6, style='padding-left:55px;', 
+                      htmlOutput("abundPlot_caption")),
+               column(width = 6, style='padding-left:55px;',
+                      htmlOutput("wnvPlot_caption"))
              ),
              br()
              
              
-             ), ## END TAB 2
+             ), ## END TAB 1
+    
+    
+    
+    
+           
+    ## TAB 2: WNV Interactive Map ----------------------------------------------  
+    tabPanel("Risk Map",
+             id = "tab2",
+        div(class = "outer",
+            
+            ## Use custom CSS
+            tags$head(
+              includeCSS("styles.css")
+              ),
+            
+            
+            ## Interactive map
+            leafletOutput("map", width = "100%", height = "100%"),
+            
+            
+            ## Dragable panel on right
+            absolutePanel(id = "controls", class = "panel panel-default",
+                          fixed = TRUE, draggable = TRUE,
+                          top = 60, left = "auto", right = 20, bottom = "auto",
+                          width = 350, height = "auto",
+              
+              ## Zip code
+              textInput(inputId = "zip_box", label = h3("Zip code:"),
+                        value = NULL,
+                        placeholder = "Enter your zip code..."
+                        ),
+              hr(style = 'border-top: 1.5px solid #2d3e50'),
+              
+              ## Transmission risk text
+              htmlOutput("r0_header"),
+              htmlOutput("r0_value"),
+              htmlOutput("r0_line"),
+              
+              ## Temp plot
+              htmlOutput("temp_header"),
+              uiOutput("temp_dateRange"),
+              htmlOutput("tempDays_text"),
+              plotOutput("temp_plot", height = 180),
+              htmlOutput("temp_line"),
+              
+              ## Standing water plot
+              htmlOutput("water_header"),
+              plotOutput("water_plot", height = 170)
+              
+              
+        ) ## End panel
+            ),
+           ), ## END TAB 2
     
     
     

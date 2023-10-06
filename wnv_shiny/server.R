@@ -12,7 +12,7 @@ library(sf)            ## Leaflet-friendly vector pkg
 
 ## Rasters
 wnv_trans <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
-water <- raster(here('data/water/water_reproj.tif'))
+# water <- raster(here('data/water/water_reproj.tif'))
 
 ## Vectors
 zips_sf <- st_read(here('data/zipcodes/kern_zips.shp'))
@@ -920,5 +920,57 @@ function(input, output, session) {
   })
 
   
+  
+  # TAB 3 - Standing Water ##################################################
+  r = stack(here("data/water/p42_2023_stack.tif"))
+  r1 = r$rast_2023_03_13
+  
+  # output$value <- renderPrint(water_rast())
+  
+  output$waterMap <- renderLeaflet({
+    leaflet() %>% 
+      addProviderTiles(providers$Esri.WorldImagery) %>% 
+      addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
+                     group = "water") 
+      # setView(-119.2, 35.38, zoom = 10)
+  })
+  
+  water_rast <- reactive({
+    date = input$waterDate
+
+    if (date <= "2023-04-05") {
+      x=1
+    } else if (date <= "2023-04-13") {
+      x=2
+    } else if (date <= "2023-04-29") {
+      x=3
+    } else if (date <="2023-05-23") {
+      x=4
+    } else if (date <="2023-05-31") {
+      x=5
+    } else if (date <="2023-06-16") {
+      x=6
+    } else if (date <="2023-06-24") {
+      x=7
+    } else if (date <="2023-07-10") {
+      x=8
+    } else {
+      x=9
+    }
+
+    rast = r[[x]]
+    
+    return(rast)
+  })
+  
+  # test = reactive({r[[paste0("rast_", gsub("-", "_", input$waterDate))]]})
+  
+  observe({
+    leafletProxy("waterMap") %>%
+      clearGroup("water") %>%
+      addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
+                     group = "water")
+  })
+
   
 } ### END SERVER

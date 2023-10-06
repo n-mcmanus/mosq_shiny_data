@@ -157,7 +157,21 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     ## TAB 3: STANDING WATER  --------------------------------------------------
     tabPanel("Standing water",
              value = "tab3",
-             p("This is where we'll explore changes of standing water over time with graphs and/or animated GIFs.")
+             p("This is where we'll explore changes of standing water over time with graphs and/or animated GIFs."),
+             
+             ## time slider
+             sliderInput("waterDate", 
+                         "Slide to date:",
+                         min = as.Date("2023-03-13"),
+                         max = as.Date("2023-07-11"),
+                         value = as.Date("2023-03-13"),
+                         timeFormat = "%d %b %y",
+                         ticks = TRUE,
+                         animate = animationOptions(interval = 100)),
+             # verbatimTextOutput("value"),
+             
+             ## map
+             leafletOutput("waterMap", height = "400px")
              
              ), ## END TAB 3
     

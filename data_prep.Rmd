@@ -192,9 +192,10 @@ waterMerge <- function(rast35, mask35, rast36, mask36, date, kern, pathOut) {
   ## reproject kern to crs of raster bc faster
   kern_reproj = project(kern, y = crs(m))
   ## crop merged rast to kern county
-  m_kern = crop(m, kern_reproj)
+  m_kern = crop(m, kern_reproj, mask = TRUE)
  
-  terra::writeRaster(m_kern, filename = paste0(pathOut, "p42_kern_", date, ".tif"))
+  terra::writeRaster(m_kern, filename=paste0(pathOut,"p42_kern_",date,".tif"),
+                     overwrite = TRUE)
 }
 
 ## Run fxn for all files in directory
@@ -328,9 +329,6 @@ s <- sprc(rast1, rast2, rast3, rast4, rast5,
 ## merge rast collection, then reproj to leaflet crs
 m <- merge(s) %>% 
   project(y = crs("epsg:900913"))
-## read in Kern shp
-kern <- vect(here("data/counties_ca/kern.shp")) %>% 
-  project(y = crs(m))
 
 ## Now change the extent of every raster to that of the merged one
 ## and make all 0 values NA (transparent for leaflet map)

@@ -353,8 +353,8 @@ writeRaster(stack, here("data/water/p042_masked_merged/p42_2023_stack.tif"),
 
 test animated plot
 ```{r}
-r = stack(here("data/water/p042_masked_merged/p42_2023_stack.tif"))
-r1 = r$rast.1
+r = stack(here("data/water/p42_2023_stack.tif"))
+r1 = r$rast_2023_03_13
 
 test = projectRaster(r1, crs = "epsg:900913")
 
@@ -364,7 +364,7 @@ library(leaflet)
 
 leaflet() %>% 
   addProviderTiles(providers$Esri.WorldImagery) %>%
-  addRasterImage(test, colors = "dodgerblue4", project =F)
+  addRasterImage(r1, colors = "dodgerblue4", project =F)
 
 
 ```

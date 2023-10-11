@@ -148,7 +148,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
               
               ## Standing water plot
               htmlOutput("water_header"),
-              uiOutput("water_dateRange"),
+              # uiOutput("water_dateRange"),
               plotOutput("water_plot", height = 170)
               
               ) ## END panel
@@ -163,22 +163,43 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     tabPanel("Standing water",
              value = "tab3",
              p("This is where we'll explore changes of standing water over time with graphs and/or animated GIFs."),
+             ### Side Panel: 
+             sidebarPanel(
+               ### Zipcode input:
+               textInput(inputId = "zip_box_water", label = h4(strong("Zip code:")),
+                         value = NULL,
+                         placeholder = "Enter your zip code..."
+               ),
+               br(),
+               
+               h4(strong("Time period:")),
+               dateRangeInput("water_dateRange", 
+                              label = NULL,
+                              start = "2023-03-01",
+                              end = "2023-07-31",
+                              min = "2022-03-01",
+                              max = "2023-07-31")
+               
+             ), ### End side panel
              
-             ## time slider
-             sliderInput("waterDate", 
-                         "Slide to date:",
-                         min = as.Date("2023-03-13"),
-                         max = as.Date("2023-07-11"),
-                         value = as.Date("2023-03-13"),
-                         timeFormat = "%d %b %y",
-                         ticks = TRUE,
-                         animate = animationOptions(interval = 500)),
-             # verbatimTextOutput("value"),
-             
-             ## map
-             leafletOutput("waterMap", height = "500px")
-             
-             ), ## END TAB 3
+             mainPanel(
+               ## time slider
+               sliderInput("waterDate",
+                           "Slide to date:",
+                           min = as.Date("2023-03-13"),
+                           max = as.Date("2023-07-11"),
+                           value = as.Date("2023-03-13"),
+                           timeFormat = "%d %b %y",
+                           ticks = TRUE,
+                           animate = animationOptions(interval = 500)),
+               # verbatimTextOutput("value"),
+
+               ## map
+               leafletOutput("waterMap", height = "300px"),
+             ), ## End main panel
+         
+               uiOutput("waterTab_plot")
+          ), ## END TAB 3
     
     
     

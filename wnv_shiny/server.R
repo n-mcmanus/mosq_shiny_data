@@ -862,9 +862,11 @@ function(input, output, session) {
   
   ## Standing water time series
   output$water_plot <- renderPlot({
-   if (!(zipcode_d() %in% zips_sf$zipcode))
+   if (!(zipcode_d() %in% zips_sf$zipcode)) {
      return(NULL)
-     
+   } else if (length(water_zip()$acres_int)==0) {
+     strong("No water data available for this time.")
+   } else {
     ggplot(data = water_zip(), aes(x = date, y = acres_int)) +
       geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
       geom_line(linewidth = 0.6, color = "dodgerblue4") +
@@ -880,7 +882,7 @@ function(input, output, session) {
         axis.title.y = element_text(vjust = 2, size = 14),
         axis.text = element_text(size = 13)
       )
-   
+   }
   })
   
 
@@ -991,17 +993,17 @@ function(input, output, session) {
   # TAB 3 - Standing Water ##################################################
   r = stack(here("data/water/p42_2023_stack.tif"))
   r1 = r$rast_2023_03_13
-  
+
   # output$value <- renderPrint(water_rast())
-  
+
   output$waterMap <- renderLeaflet({
-    leaflet() %>% 
-      addProviderTiles(providers$Esri.WorldImagery) %>% 
+    leaflet() %>%
+      addProviderTiles(providers$Esri.WorldImagery) %>%
       addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
-                     group = "water") 
-      # setView(-119.2, 35.38, zoom = 10)
+                     group = "water") %>% 
+      setView(-119.2, 35.38, zoom = 10)
   })
-  
+
   water_rast <- reactive({
     date = input$waterDate
 
@@ -1026,22 +1028,80 @@ function(input, output, session) {
     }
 
     rast = r[[x]]
-    
+
     return(rast)
   })
-  
+
   # test = reactive({r[[paste0("rast_", gsub("-", "_", input$waterDate))]]})
-  
+
   observe({
     leafletProxy("waterMap") %>%
       clearGroup("water") %>%
       addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
                      group = "water")
   })
+  
+  
+  ### Zip code box ----------------
+  ## React to user input and slightly delay response
+  zipcodeWater <- reactive(input$zip_box_water)
+  zipcodeWater_d <- debounce(zipcodeWater, millis = 1500)
+  
+  ## Validation text below zip box
+  ivTrap <- InputValidator$new()
+  ### Must be 5 numbers
+  ivTrap$add_rule("zip_box_water", function(length) {
+    length = nchar(zipcodeWater_d())
+    if (length !=5 & length != 0) {
+      "Only 5-character entries are permitted."
+    }
+  })
+  ### Must be zip in Kern
+  ivTrap$add_rule("zip_box_water", function(zipcodeWater_d) {
+    if (!(zipcodeWater_d() %in% zips_sf$zipcode) & nchar(zipcodeWater_d()) != 0) {
+      "Please enter a valid zip code."
+    } 
+  })
+  ivTrap$enable()
+
+  ## Filter water data based on zip input
+  waterTab_data <- reactive({
+    water_filtered <- water_zip_df %>% 
+      filter(zipcode == zipcodeWater_d(),
+             date >= input$water_dateRange[1] & date <= input$water_dateRange[2])
+    return(water_filtered)
+  })   
+  
+  ## Standing water time series
+  output$waterTab_plot <- renderUI({
+    if (!(zipcodeWater_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else if (length(waterTab_data()$acres_int)==0) {
+      strong("No water data available for this time.")
+    } else {
+    renderPlot({
+      ggplot(data = waterTab_data(), aes(x = date, y = acres_int)) +
+        geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
+        geom_line(linewidth = 0.6, color = "dodgerblue4") +
+        labs(y = "Surface water (acres)",
+             x = element_blank()) +
+        ## customize axis with cont 'date' class data
+        # scale_x_date(limits = as.Date(c('2023-05-07', '2023-06-25')),
+        #              date_breaks = "2 week",
+        #              date_labels = "%b %d") +
+        theme_classic() +
+        theme(
+          # axis.title.x = element_text(face = "bold", vjust = -1),
+          axis.title.y = element_text(vjust = 2, size = 14),
+          axis.text = element_text(size = 13)
+        )
+      })
+    }
+  })
 
   
   
-  # TAB 3 - Info ##################################################
+  # TAB 4 - Info ##################################################
 
   
 } ### END SERVER

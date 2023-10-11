@@ -566,46 +566,100 @@ function(input, output, session) {
   
   
   #### R0 ---------------------------
-  ## Return mean transmission risk based on zip input
-  r0_zip <- reactive({
-    r0_filtered <- r0_zip_df %>% 
-      filter(zipcode == zipcode_d())
-    ## return only transmission value
-    r0_mean <- round(r0_filtered$trans_eff,3)
-    return(r0_mean)
-  })
+  # ## Return mean transmission risk based on zip input
+  # r0_zip <- reactive({
+  #   r0_filtered <- r0_zip_df %>% 
+  #     filter(zipcode == zipcode_d())
+  #   ## return only transmission value
+  #   r0_mean <- round(r0_filtered$trans_eff,3)
+  #   return(r0_mean)
+  # })
+  # 
+  # ## Total avg transmission risk for Kern
+  # r0_kern <- r0_zip_df %>% 
+  #   filter(zipcode == "Kern")
+  # 
+  # 
+  # ## R0 header
+  # output$r0_header <- renderText({
+  #   ## If invalid zip input, don't show text
+  #   if (!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #   } else {
+  #     paste0("<h3>", "Transmission (R",'<sub>', '0','</sub>', "):", "</h3>")
+  #   }
+  # })
+  # 
+  # ## Reactive R0 text
+  # output$r0_value <- renderText({
+  #   ## If invalid zip input, don't show text
+  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #     ## If there is no trans data for zipcode
+  #   } else if (is.na(r0_zip())) {
+  #     paste0("The average R",'<sub>', '0','</sub>', " across Kern County is: ","<b>",round(r0_kern[1,1],3),"</b>", "<br>", "No transmission data are available for the selected zip code.")
+  #   } else {
+  #     ## Text for valid zips
+  #     paste("The average R",'<sub>', '0','</sub>', " across Kern County is: ", "<b>",round(r0_kern[1,1],3),"</b>", "<br>", 'The average R','<sub>', '0','</sub>', ' within zip code ', zipcode_d(), "is: ", "<b>",r0_zip(),"</b>")
+  #   }
+  # })
+  # 
+  # ## Line
+  # output$r0_line <- renderUI({
+  #   ## If invalid zip input, don't show text
+  #   if (!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #   } else {
+  #     hr(style = 'border-top: 1.5px solid #2d3e50')
+  #   }
+  # })
   
-  ## Total avg transmission risk for Kern
-  r0_kern <- r0_zip_df %>% 
-    filter(zipcode == "Kern")
   
-  
-  ## R0 header
-  output$r0_header <- renderText({
-    ## If invalid zip input, don't show text
-    if (!(zipcode_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      paste0("<h3>", "Transmission (R",'<sub>', '0','</sub>', "):", "</h3>")
-    }
-  })
-  
-  ## Reactive R0 text
-  output$r0_value <- renderText({
-    ## If invalid zip input, don't show text
+  #### Date range --------------------
+  ## Date header
+  output$dates_header <- renderText({
+    ## If invalid zip, don't show text
     if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
-      ## If there is no trans data for zipcode
-    } else if (is.na(r0_zip())) {
-      paste0("The average R",'<sub>', '0','</sub>', " across Kern County is: ","<b>",round(r0_kern[1,1],3),"</b>", "<br>", "No transmission data are available for the selected zip code.")
     } else {
-      ## Text for valid zips
-      paste("The average R",'<sub>', '0','</sub>', " across Kern County is: ", "<b>",round(r0_kern[1,1],3),"</b>", "<br>", 'The average R','<sub>', '0','</sub>', ' within zip code ', zipcode_d(), "is: ", "<b>",r0_zip(),"</b>")
+      paste("<h3>", "Date range:", "</h3>")
     }
   })
   
+  ## Risk date range
+  output$risk_dateRange <- renderUI({
+    if(!(zipcode_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else {
+      dateRangeInput("risk_dateRange",
+                     label = NULL,
+                     start = "2023-01-01",
+                     end = "2023-07-31")
+    }
+  })
+  
+  ## Validation text for risk date range
+  ivTemp <- InputValidator$new()
+  ### Proper end date
+  ivTemp$add_rule("risk_dateRange", function(start, end) {
+    start = input$risk_dateRange[1]
+    end = input$risk_dateRange[2]
+    if (end < start) {
+      "End date is earlier than start date."
+    }
+  })
+  ### Dates w/in data range
+  ivTemp$add_rule("temp_dateRange", 
+                  ~ if(input$risk_dateRange[1] < "2018-01-01") 
+                    "Start date must be after 2018-01-01.")
+  ivTemp$add_rule("temp_dateRange", 
+                  ~ if(input$risk_dateRange[2] > "2023-07-31") 
+                    "End date must be before 2023-07-31.")
+  
+  ivTemp$enable()
+  
   ## Line
-  output$r0_line <- renderUI({
+  output$date_line <- renderUI({
     ## If invalid zip input, don't show text
     if (!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
@@ -613,7 +667,6 @@ function(input, output, session) {
       hr(style = 'border-top: 1.5px solid #2d3e50')
     }
   })
-  
   
   #### Temperature -------------------
   ## Temp header
@@ -626,46 +679,46 @@ function(input, output, session) {
     }
   })
   
-  ## Temp date range
-  output$temp_dateRange <- renderUI({
-    if(!(zipcode_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      dateRangeInput("temp_dateRange",
-                     label = NULL,
-                     start = "2023-01-01",
-                     end = "2023-07-31")
-    }
-  })
+  # ## Temp date range
+  # output$temp_dateRange <- renderUI({
+  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #   } else {
+  #     dateRangeInput("temp_dateRange",
+  #                    label = NULL,
+  #                    start = "2023-01-01",
+  #                    end = "2023-07-31")
+  #   }
+  # })
   
   ## Filter temp data based on zip input
   temp_zip <- reactive({
     temp_filtered <- temp_zip_df %>% 
       filter(zipcode == zipcode_d(),
-             date >= input$temp_dateRange[1] & date <= input$temp_dateRange[2]) 
+             date >= input$risk_dateRange[1] & date <= input$risk_dateRange[2]) 
     
     return(temp_filtered)
   })   
   
-  ## Validation text for temp date range
-  ivTemp <- InputValidator$new()
-      ### Proper end date
-      ivTemp$add_rule("temp_dateRange", function(start, end) {
-        start = input$temp_dateRange[1]
-        end = input$temp_dateRange[2]
-        if (end < start) {
-          "End date is earlier than start date."
-        }
-      })
-      ### Dates w/in data range
-      ivTemp$add_rule("temp_dateRange", 
-                      ~ if(input$temp_dateRange[1] < "2018-01-01") 
-                        "Start date must be after 2018-01-01.")
-      ivTemp$add_rule("temp_dateRange", 
-                      ~ if(input$temp_dateRange[2] > "2023-07-31") 
-                        "End date must be before 2023-07-31.")
-
-  ivTemp$enable()
+  # ## Validation text for temp date range
+  # ivTemp <- InputValidator$new()
+  #     ### Proper end date
+  #     ivTemp$add_rule("temp_dateRange", function(start, end) {
+  #       start = input$risk_dateRange[1]
+  #       end = input$risk_dateRange[2]
+  #       if (end < start) {
+  #         "End date is earlier than start date."
+  #       }
+  #     })
+  #     ### Dates w/in data range
+  #     ivTemp$add_rule("temp_dateRange", 
+  #                     ~ if(input$temp_dateRange[1] < "2018-01-01") 
+  #                       "Start date must be after 2018-01-01.")
+  #     ivTemp$add_rule("temp_dateRange", 
+  #                     ~ if(input$temp_dateRange[2] > "2023-07-31") 
+  #                       "End date must be before 2023-07-31.")
+  # 
+  # ivTemp$enable()
   
   ## Number of days at optimal temp
   tempOptDays_int <- reactive({
@@ -706,8 +759,8 @@ function(input, output, session) {
   output$temp_plot <- renderPlot({
     if (!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
-    } else if (difftime(input$temp_dateRange[2],
-                        input$temp_dateRange[1]) <= 31) {
+    } else if (difftime(input$risk_dateRange[2],
+                        input$risk_dateRange[1]) <= 31) {
       ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
         geom_rect(xmin = -Inf, xmax = Inf, ymax = 89.42, ymin = 78.6,
                   alpha = 0.05, fill = "gray89")+
@@ -785,10 +838,24 @@ function(input, output, session) {
     }
   })
   
+  
+  # ## Water date range
+  # output$water_dateRange <- renderUI({
+  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #   } else {
+  #     dateRangeInput("water_dateRange",
+  #                    label = NULL,
+  #                    start = "2023-01-01",
+  #                    end = "2023-07-31")
+  #   }
+  # })
+  
   ## Filter water data based on zip input
   water_zip <- reactive({
     water_filtered <- water_zip_df %>% 
-      filter(zipcode == zipcode_d()) 
+      filter(zipcode == zipcode_d(),
+             date >= input$risk_dateRange[1] & date <= input$risk_dateRange[2]) 
     
     return(water_filtered)
   })   
@@ -798,7 +865,7 @@ function(input, output, session) {
    if (!(zipcode_d() %in% zips_sf$zipcode))
      return(NULL)
      
-    ggplot(data = water_zip(), aes(x = date, y = water_acres)) +
+    ggplot(data = water_zip(), aes(x = date, y = acres_int)) +
       geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
       geom_line(linewidth = 0.6, color = "dodgerblue4") +
       labs(y = "Surface water (acres)",
@@ -971,6 +1038,10 @@ function(input, output, session) {
       addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
                      group = "water")
   })
+
+  
+  
+  # TAB 3 - Info ##################################################
 
   
 } ### END SERVER

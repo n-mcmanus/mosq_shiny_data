@@ -14,7 +14,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
     ## TAB 1: WNV TRAP CASES ---------------------------------------------------
     tabPanel("Mosquito Data",
              value = "tab1",
-             h2("Mosquito Abundance and WNV"),
+             h2("Mosquito Abundance and Diseases"),
              p("Here will be info and copy about the data, such as: Mosquito abundance and WNV data comes from monitoring and testing efforts of the Kern Mosquito and Vector Control District. Copy on methodology: Traps are layed out and checked every 1-X days. These pools of trapped mosquitos are then tested for a range of mosquito-borne diseases. To standardize for monitoring effort, abundance and WNV cases are reported as mosquitos per trap night and minimum infection rate (MIR), respectively. For more details, click on the information icon in the navigation bar."),
              p("You can view information by zip code either by entering the zip code of interest on the left-hand panel, or by clicking on the zip code within the map on the right."),
              ### Side Panel: 
@@ -44,7 +44,15 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                                                               "2021" = "2021",
                                                               "2020" = "2020",
                                                               "2019" = "2019",
-                                                              "2018" = "2018"),
+                                                              "2018" = "2018",
+                                                              "2017" = "2017",
+                                                              "2016" = "2016",
+                                                              "2015" = "2015",
+                                                              "2014" = "2014",
+                                                              "2013" = "2013",
+                                                              "2012" = "2012",
+                                                              "2011" = "2011", 
+                                                              "2010" = "2010"),
                                                selected = 2023)),
                  column(width = 6, selectInput("trapMonth", label = "Month:",
                                                choices = list("NA" = "none",
@@ -60,22 +68,8 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                               label = NULL,
                               start = "2023-01-01",
                               end = "2023-07-31",
-                              min = "2018-04-15",
-                              max = "2023-07-31"),
-               
-               
-               ### Time period (OLD CODE):
-               # h4("Time period:"),
-               # fluidRow(   ## put both input boxes in-line
-               #   column(width = 6, selectInput("trapTime", label = "Select timeframe:",
-               #                                 choices = list("Annual" = "annual",
-               #                                                "Monthly" = "monthly",
-               #                                                "Custom" = "custom"),
-               #                                 selected = "annual")),
-               #   column(width = 6, uiOutput("trapMonth"))
-               # ),
-               # uiOutput("trap_dateRange"),
-               
+                              min = "2010-03-01",
+                              max = "2023-09-30"),
              ), ### End side panel
              
              ### Interactive map:
@@ -87,10 +81,11 @@ navbarPage(title = "WNV in Kern County", id = "nav",
              ### Plots
              fluidRow(
                column(width = 6, uiOutput("abund_plot")),
-               column(width = 6, uiOutput("wnv_plot"))
+               column(width = 6, uiOutput("wnv_plot"),
+                      uiOutput("slev_plot"))
              ),
              fluidRow(
-               column(width = 6, style='padding-left:55px;', 
+               column(width = 6, style='padding-left:50px;', 
                       htmlOutput("abundPlot_caption")),
                column(width = 6, style='padding-left:55px;',
                       htmlOutput("wnvPlot_caption"))
@@ -218,8 +213,6 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                                           p("While over 50 species of mosquitoes can be found in California, not all present a threat to human health. Within Kern county, there are four species of concern responsible for disease transmission. Three of these species belong to the", em("Culex"), "genus and share similar life cycles and breeding conditions (true??).", em("A. aegypti"), ", however, differ in breeding habitat and biting activity. More information on these mosquito-borne diseases can be found in the following section."),
                                           HTML("<p> You can find more <a href='#temp_dateRange'> click here</a> other stuff"),
                                           bsCollapsePanel(title = p(em("Culex"),"mosquitoes:"),
-                                                          p("Mosquitos from the genus Culex are the most common in Kern. 
-                                                            While they all are capabile of transmitting "),
                                                           tabsetPanel(type = "pills",
                                                                       tabPanel("C. tarsalis",
                                                                                p(em("Culex tarsalis"), ", commonly known as the Western Encephalitis mosquito, is one of the primary vectors for West Nile, St. Louis encephalitis, and equine encephalitis viruses. This species breeds in agricultural, natural, and human-made water sources and is most active at dawn, dusk, and after dark."),
@@ -267,7 +260,7 @@ navbarPage(title = "WNV in Kern County", id = "nav",
                                             column(width = 5, icon("droplet", "fa-5x"), align="center",
                                                    br(),
                                                    strong("Standing water"),
-                                                   p("The amount of standing water near your home/place of work can have a large impact on the abundance of mosquitoes in the area blahalba lbha albha lbd")),
+                                                   p("The amount of standing water near your home/place of work can have a large impact on the abundance of mosquitoes in the area etc etc")),
                                             column(width = 5, icon("temperature-three-quarters", "fa-5x"),
                                                    align = "center")
                                           )

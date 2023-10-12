@@ -270,7 +270,10 @@ waterStats_df = read_csv(here("data/water/water_acre_zipcode.csv")) %>%
 
 water_int_df = waterStats_df %>% 
   group_by(zipcode) %>% 
-  ## For three dates, just avg values directly before/after
+  ## remove first bad date complete 
+  ## (not enough info to interpolate)
+  filter(date != "2022-03-10") %>% 
+  ## For four dates, just avg values directly before/after
   mutate(acres_int = case_when(date %in% c("2022-06-06",
                                            "2023-04-22",
                                            "2023-06-09",

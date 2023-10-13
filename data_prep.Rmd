@@ -265,12 +265,17 @@ write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
 
 There are some cloud issues with masking for standing water. The values for select dates will be replaced by an averaged value from the date prior and following.
 ```{r}
-waterStats_df = read_csv(here("data/water/water_acre_zipcode.csv"))
+waterStats_df = read_csv(here("data/water/water_acre_zipcode.csv")) %>% 
+  mutate(date = as.character(date))
 
 water_int_df = waterStats_df %>% 
   group_by(zipcode) %>% 
-  ## For three dates, just avg values directly before/after
-  mutate(acres_int = case_when(date %in% c("2023-04-22",
+  ## remove first bad date complete 
+  ## (not enough info to interpolate)
+  filter(date != "2022-03-10") %>% 
+  ## For four dates, just avg values directly before/after
+  mutate(acres_int = case_when(date %in% c("2022-06-06",
+                                           "2023-04-22",
                                            "2023-06-09",
                                            "2023-07-03") 
                                ~((lead(acres, n = 1)+lag(acres, n = 1))/2),
@@ -280,9 +285,10 @@ water_int_df = waterStats_df %>%
                                ~NA,
                                .default = acres)) %>% 
   mutate(acres_int = na.approx(acres_int)) %>% 
-  mutate(ncells_int = case_when(date %in% c("2023-04-22",
-                                           "2023-06-09",
-                                           "2023-07-03") 
+  mutate(ncells_int = case_when(date %in% c("2022-06-06",
+                                            "2023-04-22",
+                                            "2023-06-09",
+                                            "2023-07-03") 
                                 ~(round(((lead(ncells, n = 1)+lag(ncells, n = 1))/2),0)),
                                ## B/c these dates are sequential, replace w/NA then interpolate
                                date %in% c("2023-05-08",
@@ -443,24 +449,25 @@ Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locati
 
 Because trap data is aggregated and assigned to clusters, we'll first need to assign each cluster to a zip code. 
 ```{r}
-clust <- read_sf(here("data/traps/shp_files/clusterPolys.shp"))
+clust <- read_sf(here("data/traps/andy/cluster_shp/clusterPolys.shp"))
 
 zips <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
   st_transform(crs = crs(clust))
 
 clust_zips <- st_centroid(clust) %>% 
   st_join(zips) %>% 
-  ## centroid of clust 9 *just* outside
-  ## manually adding to zip 93280
-  within(., zipcode[clust == 9] <- 93280) %>% 
-  within(., area_m2[clust == 9] <- (zips$area_m2[zips$zipcode==93280]))
+  ## centroid of clust 7 and 95 *just* outside 93308
+  ## manually adding to zips
+  within(., zipcode[clust == 7] <- 93280) %>% 
+  within(., area_m2[clust == 7] <- (zips$area_m2[zips$zipcode==93280])) %>% 
+  within(., zipcode[clust == 95] <- 93308) %>% 
+  within(., area_m2[clust == 95] <- zips$area_m2[zips$zipcode==93308])
 ```
 
-
-Andy's new data:
+Now we can assign zipcodes to abundance and MIR data:
 ```{r}
-## wnv infection
-wnv <- read_csv(here('data/traps/wnvMIRPIR1500LagWeeks0_NA.csv')) %>% 
+## WNV MIR
+wnv <- read_csv(here("data/traps/andy/wnvMIRPIR1500LagWeeks0_NA.csv")) %>% 
   janitor::clean_names() %>% 
   ## assign zip by clust
   inner_join(x = .,y = clust_zips) %>% 
@@ -469,11 +476,20 @@ wnv <- read_csv(here('data/traps/wnvMIRPIR1500LagWeeks0_NA.csv')) %>%
                 pool_size, num_pools, mir_all, mir_spline_all) %>%
   mutate(month = lubridate::month(date),
          .before = year)
-write_csv(wnv, here("data/traps/wnvMIR_plotting.csv"))
+write_csv(wnv, here("data/traps/plotting/wnvMIR_plotting.csv"))
 
+## SLEV MIR
+slev <- read_csv(here("data/traps/andy/slevMIRPIR1500LagWeeks0_NA.csv")) %>% 
+  janitor::clean_names() %>% 
+  inner_join(x=., y=clust_zips) %>% 
+  dplyr::select(zipcode, clust:woy, date,
+                pool_size, num_pools, mir_all, mir_spline_all) %>% 
+  mutate(month = lubridate::month(date),
+         .before = year)
+write_csv(slev, here("data/traps/plotting/slevMIR_plotting.csv"))
 
 ### abundance
-abund <- read_csv(here('data/traps/all1500LagWeeks0_NA.csv')) %>% 
+abund <- read_csv(here('data/traps/andy/all1500LagWeeks0_NA.csv')) %>% 
   janitor::clean_names() %>% 
   ## assign zip by clust
   inner_join(x=., y=clust_zips) %>% 
@@ -482,7 +498,7 @@ abund <- read_csv(here('data/traps/all1500LagWeeks0_NA.csv')) %>%
   rename(date = collection_date) %>% 
   mutate(month = lubridate::month(date),
          .before = year)
-write_csv(abund, here("data/traps/abundance_plotting.csv"))
+write_csv(abund, here("data/traps/plotting/abundance_plotting.csv"))
 ```
 
 
@@ -724,15 +740,16 @@ data_a1<-data_a %>%
 
 
 ```{r}
-data <- read_csv(here('data/water/water_acre_zipcode.csv'))
+water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
 
 user_input <- "93311"
 
-data_filtered <- data %>% 
-  filter(zipcode == user_input)
+data_filtered <- water_zip_df %>% 
+  filter(zipcode == user_input, 
+         date >= "2020-03-01" & date <= "2020-07-31")
 
 
-ggplot(data_filtered, aes(x = date, y = water_acres)) +
+ggplot(data_filtered, aes(x = date, y = acres_int)) +
   geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
   geom_line(size = 0.6, color = "dodgerblue4") +
   labs(y = "Surface water size (ha)",

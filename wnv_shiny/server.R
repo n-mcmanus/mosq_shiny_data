@@ -17,7 +17,7 @@ wnv_trans <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
 ## Vectors
 zips_sf <- st_read(here('data/zipcodes/kern_zips.shp'))
 kern_sf <- st_read(here('data/counties_ca/kern.shp'))
-valley_sf <- st_read(here('data/central_valley/valley.shp'))
+# valley_sf <- st_read(here('data/central_valley/valley.shp'))
 
 ## Data frames
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
@@ -169,9 +169,9 @@ function(input, output, session) {
                    group = "Kern county") %>% 
       
       ### Central valley
-      addPolylines(data = valley_sf,
-                   color = 'blue', weight = 3, fillOpacity = 0,
-                   group = "Central Valley") %>% 
+      # addPolylines(data = valley_sf,
+      #              color = 'blue', weight = 3, fillOpacity = 0,
+      #              group = "Central Valley") %>% 
       
       ## Create map groups
       addLayersControl(
@@ -854,9 +854,9 @@ function(input, output, session) {
                    group = "Kern county") %>% 
     
       ## Central valley
-      addPolylines(data = valley_sf,
-                   color = 'blue', weight = 3, fillOpacity = 0,
-                   group = "Central Valley") %>% 
+      # addPolylines(data = valley_sf,
+      #              color = 'blue', weight = 3, fillOpacity = 0,
+      #              group = "Central Valley") %>% 
       
       #### Create map groups -----------------------------
       addLayersControl(

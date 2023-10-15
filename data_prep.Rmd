@@ -306,7 +306,8 @@ write_csv(water_int_df, here("data/water/water_acre_zipcode.csv"))
 To stack for a .gif, rasters must be same extent, resolution, and number of rows/columns. First we'll merge path42 rasters by year to determine the common extent between all. Then, each raster will be resampled to have this identical extent, stacked, and saved.
 *NOTE:* Trying to crop/mask them by zipcode, then stack, to see if that runs faster in Shiny.
 ```{r}
-pathIn = here("data/water/p042_masked_merged/2023//")
+path23 = here("data/water/p042_masked_merged/2023//")
+path22 = here("data/water/p042_masked_merged/2022//")
 
 dates <- function(files) {
       str_split(files, "_", simplify = TRUE) %>% 
@@ -315,20 +316,91 @@ dates <- function(files) {
       dplyr::select(date)
  }
 
-df = data.frame(rasts = list.files(pathIn, pattern="kern", full.names=FALSE)) %>%
+## df of file paths and dates of rasters to be visualized
+rasts_df = data.frame(rasts = c(list.files(path22,pattern="kern",full.names=FALSE),
+                                list.files(path23,pattern="kern",full.names=FALSE))) %>% 
   ## Add dates, then remove select rasters based on them
   mutate(dates(rasts),
-         rasts = paste0(pathIn, rasts)) %>%  
-  filter(!date %in% c("2023-04-22","2023-05-08","2023-05-16",
-                      "2023-06-09","2023-07-03")) %>% 
-  mutate(date = gsub("-", "_", date))
+         rasts = c(list.files(path22,pattern="kern",full.names=TRUE),
+                          list.files(path23,pattern="kern",full.names=TRUE))) %>%  
+  filter(!date %in% c("2022-03-10","2022-06-06","2023-04-22",
+                      "2023-05-08","2023-05-16","2023-06-09","2023-07-03")) %>% 
+  mutate(date = gsub("-", "", date))
 
 
-## Test with zipcode 93263
-zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
-  filter(zipcode == "93263") %>% 
-  vect() %>% 
-  project(y=crs(rast1))
+## Df of all zipcodes
+zips_df <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
+  dplyr::select(zipcode) %>% 
+  as.data.frame() %>% 
+  dplyr::select(!geometry) %>% 
+  mutate(path = here("data/zipcodes/kern_zips.shp"))
+  
+# crop_to_zip <- function(zipcode, rast) {
+#   zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
+#     filter(zipcode == zipcode) %>% 
+#     vect()
+# }
+
+
+
+library(webshot)
+library(htmlwidgets)
+library(htmltools)
+library(leaflet)
+
+test <- function(zipcode, path, rasts_df) {
+  
+  for(i in 1:nrow(rasts_df)) {
+    ## Read in each raster and zipcode as vect
+    r <- rast(rasts_df$rasts[1])
+    values(r)[values(r) == 0] <- NA
+    
+    zip <- read_sf(zips_df$path[1]) %>% 
+      filter(zipcode == zips_df$zipcode[1]) %>% 
+      vect() %>% 
+      project(y=crs(r))
+    
+    ## crop/mask raster to zipcode
+    r_crop <- r %>% 
+      crop(x=., y=zip, mask = TRUE)
+    
+    ## add raster to map
+    m <- leaflet() %>%
+      addProviderTiles(providers$Esri.WorldImagery) %>%
+      addRasterImage(r_crop, colors = "dodgerblue4", project =T)
+    
+    saveWidget(m, "temp.html", selfcontained = FALSE)
+    webshot("temp.html", file = "plottest.png",
+            cliprect = "viewport")
+    
+  }
+}
+
+path = paste0(here("data/water/zips//"), 
+                                       sprintf("zip_%02s_", zips_df$zipcode[1]),
+                                       sprintf("%02s.png", rasts_df$date[1]))
+
+
+## Loop to make png
+for (i in 1:nrow(df)) {
+  r <- rast(df$rasts[i])
+  zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
+    filter(zipcode == zips_df$zipcode[i])
+  
+  
+  m <- leaflet() %>% 
+    addProviderTiles(providers$Esri.WorldImagery) %>%
+    addRasterImage(r[[2]], colors = "dodgerblue4",
+                   project =F)
+
+  saveWidget(m, "temp.html", selfcontained = FALSE)
+  webshot("temp.html", file = here("testplot2.png"), cliprect = "viewport")
+}
+
+  # ## old test w/one zip
+  # filter(zipcode == "93263") %>% 
+  # vect() %>% 
+  # project(y=crs(rast1))
 
 
 ## Read in each, crop and mask to zip

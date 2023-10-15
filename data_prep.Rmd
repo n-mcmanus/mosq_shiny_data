@@ -363,16 +363,35 @@ r1 = r$rast_2023_03_13
 test = projectRaster(r1, crs = "epsg:900913")
 
 library(webshot)
+library(htmlwidgets)
 library(htmltools)
 library(leaflet)
 
-leaflet() %>% 
-  addProviderTiles(providers$Esri.WorldImagery) %>%
-  addRasterImage(r1, colors = "dodgerblue4", project =F)
+
+## Loop to make png
+for (i in 1:nlayers(r)) {
+  m <- leaflet() %>% 
+    addProviderTiles(providers$Esri.WorldImagery) %>%
+    addRasterImage(r[[2]], colors = "dodgerblue4",
+                   project =F)
+
+  saveWidget(m, "temp.html", selfcontained = FALSE)
+  webshot("temp.html", file = here("testplot2.png"), cliprect = "viewport")
+}
 
 
+## Make a gif
+library(magick)
+png_files <- c("testplot.png", "testplot2.png")
+GIF.convert <- function(x, output = "animation.gif") {
+  image_read(x) %>% 
+    image_animate(fps=1) %>% 
+    image_write(output)
+}
+GIF.convert(png_files)
 ```
 
+another test
 
 
 ### Temperature

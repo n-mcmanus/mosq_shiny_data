@@ -304,7 +304,7 @@ write_csv(water_int_df, here("data/water/water_acre_zipcode.csv"))
 
 #### Water GIF
 To stack for a .gif, rasters must be same extent, resolution, and number of rows/columns. First we'll merge path42 rasters by year to determine the common extent between all. Then, each raster will be resampled to have this identical extent, stacked, and saved.
-
+*NOTE:* Trying to crop/mask them by zipcode, then stack, to see if that runs faster in Shiny.
 ```{r}
 pathIn = here("data/water/p042_masked_merged/2023//")
 
@@ -324,8 +324,20 @@ df = data.frame(rasts = list.files(pathIn, pattern="kern", full.names=FALSE)) %>
   mutate(date = gsub("-", "_", date))
 
 
+## Test with zipcode 93263
+zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
+  filter(zipcode == "93263") %>% 
+  vect() %>% 
+  project(y=crs(rast1))
+
+
+## Read in each, crop and mask to zip
 for (i in 1:nrow(df)) {
-  r = rast(df$rasts[i])
+  r = rast(df$rasts[i]) %>% 
+    crop(x=., y=zip, mask = TRUE)
+  names(r) = paste0("rast_", df$date[i])
+  values(r)[values(r) == 0] <- NA
+    
   assign(paste0("rast", i), r)
 }
 
@@ -351,7 +363,7 @@ for (i in 1:nrow(df)) {
 stack = c(rast1, rast2, rast3, rast4, rast5,
           rast6, rast7, rast8, rast9)
 
-writeRaster(stack, here("data/water/p042_masked_merged/p42_2023_stack.tif"),
+writeRaster(stack, here("data/water/zips/zip93269_2023_stack.tif"),
             overwrite = TRUE)
 ```
 

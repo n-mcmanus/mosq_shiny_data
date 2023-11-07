@@ -316,166 +316,129 @@ dates <- function(files) {
       dplyr::select(date)
  }
 
-## df of file paths and dates of rasters to be visualized
-rasts_df = data.frame(rasts = c(list.files(path22,pattern="kern",full.names=FALSE),
-                                list.files(path23,pattern="kern",full.names=FALSE))) %>% 
-  ## Add dates, then remove select rasters based on them
-  mutate(dates(rasts),
-         rasts = c(list.files(path22,pattern="kern",full.names=TRUE),
-                          list.files(path23,pattern="kern",full.names=TRUE))) %>%  
-  filter(!date %in% c("2022-03-10","2022-06-06","2023-04-22",
-                      "2023-05-08","2023-05-16","2023-06-09","2023-07-03")) %>% 
-  mutate(date = gsub("-", "", date))
-
+rasts <- list.files(path22, pattern = "kern", full.names=FALSE)
 
 ## Df of all zipcodes
-zips_df <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
-  dplyr::select(zipcode) %>% 
-  as.data.frame() %>% 
-  dplyr::select(!geometry) %>% 
-  mutate(path = here("data/zipcodes/kern_zips.shp"))
-  
-# crop_to_zip <- function(zipcode, rast) {
-#   zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
-#     filter(zipcode == zipcode) %>% 
-#     vect()
-# }
+zips_sf <- read_sf(here("data/zipcodes/kern_zips.shp"))
+zips_list = unique(zips_sf$zipcode)
+
+
+## df of file paths and dates of rasters to be visualized
+rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
+                      zipcode = rep(zips_list, each=length(rasts))) %>% 
+  ## Add dates, then remove select rasters based on them
+  mutate(dates(rasts),
+         date = as.character(date),
+         rasts = rep(list.files(path22,pattern="kern",full.names=TRUE),
+                     length(zips_list))) %>%  
+  filter(!date %in% c("2022-03-10","2022-06-06","2023-04-22",
+                      "2023-05-08","2023-05-16","2023-06-09","2023-07-03")) %>% 
+  mutate(date_title = lubridate::ymd(date),
+         date_title = format(date_title, "%m-%d-%Y"),
+         date = gsub("-", "", date)) 
 
 
 
-library(webshot)
+library(webshot2)
 library(htmlwidgets)
 library(htmltools)
 library(leaflet)
-
-test <- function(zipcode, path, rasts_df) {
-  
-  for(i in 1:nrow(rasts_df)) {
-    ## Read in each raster and zipcode as vect
-    r <- rast(rasts_df$rasts[1])
-    values(r)[values(r) == 0] <- NA
-    
-    zip <- read_sf(zips_df$path[1]) %>% 
-      filter(zipcode == zips_df$zipcode[1]) %>% 
-      vect() %>% 
-      project(y=crs(r))
-    
-    ## crop/mask raster to zipcode
-    r_crop <- r %>% 
-      crop(x=., y=zip, mask = TRUE)
-    
-    ## add raster to map
-    m <- leaflet() %>%
-      addProviderTiles(providers$Esri.WorldImagery) %>%
-      addRasterImage(r_crop, colors = "dodgerblue4", project =T)
-    
-    saveWidget(m, "temp.html", selfcontained = FALSE)
-    webshot("temp.html", file = "plottest.png",
-            cliprect = "viewport")
-    
-  }
-}
-
-path = paste0(here("data/water/zips//"), 
-                                       sprintf("zip_%02s_", zips_df$zipcode[1]),
-                                       sprintf("%02s.png", rasts_df$date[1]))
-
-
-## Loop to make png
-for (i in 1:nrow(df)) {
-  r <- rast(df$rasts[i])
-  zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
-    filter(zipcode == zips_df$zipcode[i])
-  
-  
-  m <- leaflet() %>% 
-    addProviderTiles(providers$Esri.WorldImagery) %>%
-    addRasterImage(r[[2]], colors = "dodgerblue4",
-                   project =F)
-
-  saveWidget(m, "temp.html", selfcontained = FALSE)
-  webshot("temp.html", file = here("testplot2.png"), cliprect = "viewport")
-}
-
-  # ## old test w/one zip
-  # filter(zipcode == "93263") %>% 
-  # vect() %>% 
-  # project(y=crs(rast1))
-
-
-## Read in each, crop and mask to zip
-for (i in 1:nrow(df)) {
-  r = rast(df$rasts[i]) %>% 
-    crop(x=., y=zip, mask = TRUE)
-  names(r) = paste0("rast_", df$date[i])
-  values(r)[values(r) == 0] <- NA
-    
-  assign(paste0("rast", i), r)
-}
-
-## create rast collection
-s <- sprc(rast1, rast2, rast3, rast4, rast5,
-          rast6, rast7, rast8, rast9)
-## merge rast collection, then reproj to leaflet crs
-m <- merge(s) %>% 
-  project(y = crs("epsg:900913"))
-
-## Now change the extent of every raster to that of the merged one
-## and make all 0 values NA (transparent for leaflet map)
-for (i in 1:nrow(df)) {
-  r = rast(df$rasts[i]) %>% 
-    project(y = crs(m))
-  names(r) = paste0("rast_", df$date[i])
-  resamp <- resample(r, m, method="near")
-  values(resamp)[values(resamp) < 1] <- NA
-  assign(paste0("rast", i), resamp)
-}
-
-## Stack and export
-stack = c(rast1, rast2, rast3, rast4, rast5,
-          rast6, rast7, rast8, rast9)
-
-writeRaster(stack, here("data/water/zips/zip93269_2023_stack.tif"),
-            overwrite = TRUE)
-```
-
-test animated plot
-```{r}
-r = stack(here("data/water/p42_2023_stack.tif"))
-r1 = r$rast_2023_03_13
-
-test = projectRaster(r1, crs = "epsg:900913")
-
-library(webshot)
-library(htmlwidgets)
-library(htmltools)
-library(leaflet)
-
-
-## Loop to make png
-for (i in 1:nlayers(r)) {
-  m <- leaflet() %>% 
-    addProviderTiles(providers$Esri.WorldImagery) %>%
-    addRasterImage(r[[2]], colors = "dodgerblue4",
-                   project =F)
-
-  saveWidget(m, "temp.html", selfcontained = FALSE)
-  webshot("temp.html", file = here("testplot2.png"), cliprect = "viewport")
-}
-
-
-## Make a gif
 library(magick)
-png_files <- c("testplot.png", "testplot2.png")
-GIF.convert <- function(x, output = "animation.gif") {
+  
+
+for (j in 1:length(zips_list)) {
+  
+  rasts_filter <- rasts_df %>% 
+    filter(zipcode == zips_list[j])
+  
+  print(paste0("Working on zipcode: ", zips_list[j]))
+  
+    for(i in 1:nrow(rasts_filter))
+  {
+      ## Read in each raster and zipcode as vect
+      r <- rast(rasts_filter$rasts[i])
+      values(r)[values(r) == 0] <- NA
+
+      zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>%
+        filter(zipcode == rasts_filter$zipcode[i]) %>%
+        vect() %>%
+        project(y=crs(r))
+
+      ## crop/mask raster to zipcode
+      r_crop <- r %>%
+        crop(x=., y=zip, mask = TRUE)
+      r_crop <- raster(r_crop)
+
+      geom <- zips_sf %>%
+        filter(zipcode == rasts_filter$zipcode[i])
+      bounds <- geom %>%
+        st_bbox() %>%
+        as.character()
+      
+      tag.map.title <- tags$style(HTML("
+        .leaflet-control.map-title { 
+          transform: translate(-50%,20%);
+          position: fixed !important;
+          left: 50%;
+          text-align: center;
+          padding-left: 10px; 
+          padding-right: 10px; 
+          background: rgba(255,255,255,0.5);
+          font-weight: bold;
+          font-size: 15px;
+        }
+      "))
+
+        title <- tags$div(
+          tag.map.title, rasts_filter$date_title[i]
+        )  
+
+      ## add raster to map
+      m <- leaflet(options = leafletOptions(zoomControl = FALSE)) %>%
+        addProviderTiles(providers$Esri.WorldImagery) %>%
+        ##zips outline bottom layer
+        addMapPane("zips", zIndex = 410) %>%
+        addMapPane("water", zIndex = 415) %>%
+        addRasterImage(r_crop, colors = "blue", 
+                       project = TRUE, options=pathOptions(pane="water")) %>%
+        addPolylines(stroke=TRUE, weight = 2, color="black",
+                   fill = TRUE, fillColor = "white", fillOpacity = 0.5,
+                   data = geom, options=pathOptions(pane="zips")) %>%
+        fitBounds(lng1 = bounds[1], lat1 = bounds[2],
+                  lng2 = bounds[3], lat2 = bounds[4]) %>%
+        addControl(title, position = "topright", className="map-title")
+
+      ## save map as .png
+      saveWidget(m, here("data/water/temp/temp.html"), selfcontained = TRUE)
+      webshot(here("data/water/temp/temp.html"),
+              file = paste0(here("data/water/zips//"),
+                            sprintf("zip_%02s_", rasts_filter$zipcode[i]),
+                            sprintf("%02s.png", rasts_filter$date[i])), 
+              cliprect = "viewport",
+              delay = 1,
+              zoom = 4)
+    }
+  
+  png_files <- list.files(here("data/water/zips//"),
+                          pattern = zips_list[j])
+  
+  gif_convert <- function(x, output) {
   image_read(x) %>% 
     image_animate(fps=1) %>% 
+      ## try out "optimize" and fps arguments
+      ## in this for future run
     image_write(output)
-}
-GIF.convert(png_files)
+  }
+  
+  gif_convert(x= paste0(here("data/water/zips//"), png_files),
+              output = paste0(here("data/water/gifs//"),
+                              "zip_", zips_list[j], "_2022.gif"))
+  
+} 
+
+
 ```
 
-another test
 
 
 ### Temperature
@@ -846,26 +809,52 @@ data_a1<-data_a %>%
 water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
 
 user_input <- "93311"
+user_year <- "2023"
 
 data_filtered <- water_zip_df %>% 
-  filter(zipcode == user_input, 
-         date >= "2020-03-01" & date <= "2020-07-31")
+  filter(zipcode == user_input &
+         year == user_year)
 
 
-ggplot(data_filtered, aes(x = date, y = acres_int)) +
-  geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
-  geom_line(size = 0.6, color = "dodgerblue4") +
-  labs(y = "Surface water size (ha)",
-       x = element_blank()) +
+p<- ggplot(data_filtered, aes(x = date, y = acres_int)) +
+  geom_point(aes(group=seq_along(date)), color = "dodgerblue3", size = 3, alpha = 0.6) +
+  geom_point(color = "dodgerblue3", size = 4) +
+  geom_line(linewidth = 0.7, color = "dodgerblue4") +
+  labs(y = "Surface water (acres)",
+       x = "Date (2023)") +
+  scale_x_date(date_breaks = "2 week",
+                       date_labels = "%d %b")+
     ## customize axis with cont 'date' class data
-  scale_x_date(limits = as.Date(c('2023-03-13', '2023-06-25')),
-               date_breaks = "1 week",
-               date_labels = "%b %d") +
+  # scale_x_date(limits = as.Date(c('2023-03-13', '2023-06-25')),
+  #              date_breaks = "1 week",
+  #              date_labels = "%b %d") +
   theme_classic() +
   theme(
     # axis.title.x = element_text(face = "bold", vjust = -1),
-    axis.title.y = element_text(face = 'bold', vjust = 3)
-  )
+    axis.title.y = element_text(vjust = 2, size = 14),
+    axis.title.x = element_text(vjust = -1, size = 13),
+    axis.text.y = element_text(size = 13),
+    axis.text.x = element_text(size = 11)
+  ) +
+  transition_reveal(date)
+p
+animate(p, fps = 50, nframes = 700, end_pause = 100)
+
+anim_save("test.gif", animate(p, fps = 50, nframes = 700, end_pause = 100))
+
+
+
+p + geom_line() +
+  geom_point(aes(group = seq_along(date)), color = "dodgerblue3", size = 4) +
+  transition_reveal(date)
+
+anim2 <- ggplot(airquality, aes(Day, Temp, group = Month)) +
+  geom_line() +
+  geom_point(aes(group = seq_along(Day))) +
+  geom_point(colour = 'red', size = 3) +
+  transition_reveal(Day)
+
+anim2
 ```
 
 

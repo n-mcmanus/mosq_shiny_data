@@ -139,13 +139,14 @@ convert_tif(path = here("data/water/Landsat_Dan/p042r035/2022//"))
 
 #### Merge images
 Our AOI is split between two Landsat images (rows 35 and row 36 within path 42). First we'll merge them by date, reproject to the crs for Leaflet, and crop to Kern county. 
+- **NOTE:** Change input/output file paths to 2022 or 2023 depending on year.
 ```{r}
 ## kern county
 kern <- vect(here("data/counties_ca/kern.shp"))
 
 ## Create paths for water rasters and masks
-path35 <- here('data/water/Landsat_Dan/p042r035/2022//')
-path36 <- here('data/water/Landsat_Dan/p042r036/2022//')
+path35 <- here('data/water/Landsat_Dan/p042r035/2023//')
+path36 <- here('data/water/Landsat_Dan/p042r036/2023//')
 
 ## Fxn to extract dates based on LANDSAT naming convention
 dates <- function(files) {
@@ -187,20 +188,22 @@ waterMerge <- function(rast35, mask35, rast36, mask36, date, kern, pathOut) {
   ## merge rasts using SpatRastCollection
   s <- sprc(r_masked35, r_masked36)
   m <- merge(s)
-  
+  ## Save merged rasts
+  terra::writeRaster(m, filename=paste0(pathOut,"p42_merged_",date,".tif"),
+                     overwrite = TRUE)
 
-  ## reproject kern to crs of raster bc faster
+  ## reproject kern vect to crs of raster bc faster
   kern_reproj = project(kern, y = crs(m))
-  ## crop merged rast to kern county
+  ## crop/mask merged rast to kern county
   m_kern = crop(m, kern_reproj, mask = TRUE)
- 
+  ## Save kern masked raster
   terra::writeRaster(m_kern, filename=paste0(pathOut,"p42_kern_",date,".tif"),
                      overwrite = TRUE)
 }
 
 ## Run fxn for all files in directory
 pmap(waterInput_df, waterMerge, kern=kern,
-     pathOut = here("data/water/p042_masked_merged/2022//"), 
+     pathOut = here("data/water/p042_masked_merged/2023//"), 
      .progress = TRUE)
 ```
 
@@ -256,8 +259,8 @@ path22 <- here('data/water/p042_masked_merged/2022//')
 vect <- vect(here("data/zipcodes/kern_zips.shp"))
 
 ## Run fxn for 2023 and 2022 and bind results to one df
-waterStats_df = rbind(waterZonal(rastPath=path23, vect=vect),
-                      waterZonal(rastPath=path22, vect=vect))
+waterStats_df = rbind(waterZonal(rastPath=path22, vect=vect),
+                      waterZonal(rastPath=path23, vect=vect))
 
 ## export as .csv
 write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
@@ -272,7 +275,7 @@ water_int_df = waterStats_df %>%
   group_by(zipcode) %>% 
   ## remove first bad date complete 
   ## (not enough info to interpolate)
-  filter(date != "2022-03-10") %>% 
+  # filter(date != "2022-03-10") %>% 
   ## For four dates, just avg values directly before/after
   mutate(acres_int = case_when(date %in% c("2022-06-06",
                                            "2023-04-22",

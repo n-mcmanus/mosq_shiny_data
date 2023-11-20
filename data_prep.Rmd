@@ -472,7 +472,7 @@ temp2 <- temp %>%
   ## set T/F as factor for consistent graphic
   mutate(cx_opt = fct_relevel(cx_opt, levels = c("optimal", "in range", "out range")))
 
-write_csv(temp2, here('data/temp/kern_tmean_20180101_20230731.csv'))
+write_csv(temp2, here('data/temp/kern_tmean_20100401_20230930.csv'))
 
 
 temp3 <- temp2 %>% 

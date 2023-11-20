@@ -5,6 +5,7 @@ library(shinyalert)    ## Modals
 library(shinyvalidate) ## Text box validation messages
 library(tidyverse)     ## Always
 library(here)          ## Easier reading/writing data
+library(gganimate)     ## plot animations
 library(lubridate)     ## Wrangling/plotting dates
 library(leaflet)       ## Interactive map
 library(raster)        ## Leaflet-friendly raster pkg
@@ -17,7 +18,7 @@ library(sf)            ## Leaflet-friendly vector pkg
 ## Vectors
 zips_sf <- st_read(here('data/zipcodes/kern_zips.shp'))
 kern_sf <- st_read(here('data/counties_ca/kern.shp'))
-# valley_sf <- st_read(here('data/central_valley/valley.shp'))
+valley_sf <- st_read(here('data/central_valley/valley.shp'))
 
 ## Data frames
 water_zip_df <- read_csv(here("data/water/water_acre_zipcode.csv"))
@@ -26,7 +27,7 @@ wnv_df <- read_csv(here("data/traps/plotting/wnvMIR_plotting.csv"))
 slev_df <- read_csv(here("data/traps/plotting/slevMIR_plotting.csv"))
 abund_df <- read_csv(here('data/traps/plotting/abundance_plotting.csv')) %>% 
   janitor::clean_names()
-temp_zip_df <- read_csv(here('data/temp/kern_tmean_20180101_20230731.csv')) %>% 
+temp_zip_df <- read_csv(here('data/temp/kern_tmean_20100401_20230930.csv')) %>% 
   mutate(cx_opt = factor(cx_opt),
          cx_opt = fct_relevel(cx_opt, levels = c("optimal", "in range", "out range")))
 
@@ -46,7 +47,7 @@ function(input, output, session) {
   ## Initial modal on app launch
   shinyalert(
     title = "Welcome",
-    text = paste0("This app let's you explore the risks and hazards associated with West Nile Virus (WNV) transmission in Kern County, California. Information by zip code* can be explored by either manually typing the zip code at the upper right, or by clicking the location on the map.", "<br>", "<br>", "For more information on WNV transmission and the data used for this app, select the 'More Info' button or click on the information icon at the top of the page.", "<br>", "<br>", "<span style='font-size: 13px;'>", "<i>", "*(Note: Zip code boundaries have been limited to the extent present within both Kern County and the California Central Valley. These boundaries can be visually toggled by (un)selecting layers listed at the top left of the map.", "</i>", ")",  "</span>"),
+    text = paste0("This app lets you explore the risks and hazards associated with mosquito-borne diseases (MBD) in Kern County, California. Information by zip code* can be explored by either manually entering the zip code of interest, or by clicking the location on the map.", "<br>", "<br>", "For more information on MBD transmission, select the 'More Info' button or click on the information icon at the top of the page.", "<br>", "<br>", "<span style='font-size: 13px;'>", "<i>", "*(Note: Zip code boundaries have been limited to the extent present within both Kern County and the California Central Valley. These boundaries can be visually toggled by (un)selecting layers listed at the top left of the map.", "</i>", ")",  "</span>"),
     size = "m", 
     closeOnEsc = TRUE,
     closeOnClickOutside = TRUE,
@@ -71,6 +72,10 @@ function(input, output, session) {
   
   
   # TAB 1 - Trap Data ##########################################################
+  observeEvent(input$link_to_info, {
+    newValue <- "tab4"
+    updateTabItems(session, "nav", newValue)
+  })
   
   ## RESPONSIVE SIDE PANEL WIDGETS --------------------
   
@@ -143,9 +148,9 @@ function(input, output, session) {
                    group = "Kern county") %>% 
       
       ### Central valley
-      # addPolylines(data = valley_sf,
-      #              color = 'blue', weight = 3, fillOpacity = 0,
-      #              group = "Central Valley") %>% 
+      addPolylines(data = valley_sf,
+                   color = 'blue', weight = 2.5, fillOpacity = 0,
+                   group = "Central Valley") %>%
       
       ## Create map groups
       addLayersControl(
@@ -726,27 +731,27 @@ function(input, output, session) {
   
   
   #### Date range --------------------
-  ## Date header
-  output$dates_header <- renderText({
-    ## If invalid zip, don't show text
-    if(!(zipcode_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      paste("<h3>", "Date range:", "</h3>")
-    }
-  })
-  
-  ## Risk date range
-  output$risk_dateRange <- renderUI({
-    if(!(zipcode_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      dateRangeInput("risk_dateRange",
-                     label = NULL,
-                     start = "2023-01-01",
-                     end = "2023-07-31")
-    }
-  })
+  # ## Date header
+  # output$dates_header <- renderText({
+  #   ## If invalid zip, don't show text
+  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #   } else {
+  #     paste("<h3>", "Date range:", "</h3>")
+  #   }
+  # })
+  # 
+  # ## Risk date range
+  # output$risk_dateRange <- renderUI({
+  #   if(zipcode_d()=="") {
+  #     return(NULL)
+  #   } else {
+  #     dateRangeInput("risk_dateRange",
+  #                    label = NULL,
+  #                    start = "2023-01-01",
+  #                    end = "2023-07-31")
+  #   }
+  # })
   
   ## Validation text for risk date range
   ivTemp <- InputValidator$new()
@@ -759,12 +764,12 @@ function(input, output, session) {
     }
   })
   ### Dates w/in data range
-  ivTemp$add_rule("temp_dateRange", 
-                  ~ if(input$risk_dateRange[1] < "2018-01-01") 
-                    "Start date must be after 2018-01-01.")
-  ivTemp$add_rule("temp_dateRange", 
-                  ~ if(input$risk_dateRange[2] > "2023-07-31") 
-                    "End date must be before 2023-07-31.")
+  ivTemp$add_rule("risk_dateRange", 
+                  ~ if(input$risk_dateRange[1] < "2010-04-01") 
+                    "Start date must be after 2010-04-01.")
+  ivTemp$add_rule("risk_dateRange", 
+                  ~ if(input$risk_dateRange[2] > "2023-09-30") 
+                    "End date must be before 2023-09-30.")
   
   ivTemp$enable()
   
@@ -1033,9 +1038,9 @@ function(input, output, session) {
                    group = "Kern county") %>% 
     
       ## Central valley
-      # addPolylines(data = valley_sf,
-      #              color = 'blue', weight = 3, fillOpacity = 0,
-      #              group = "Central Valley") %>% 
+      addPolylines(data = valley_sf,
+                   color = 'blue', weight = 2.5, fillOpacity = 0,
+                   group = "Central Valley") %>%
       
       #### Create map groups -----------------------------
       addLayersControl(
@@ -1101,55 +1106,52 @@ function(input, output, session) {
   
   
   # TAB 3 - Standing Water ##################################################
-  r = stack(here("data/water/p42_2023_stack.tif"))
-  r1 = r$rast_2023_03_13
-
-  # output$value <- renderPrint(water_rast())
-
-  output$waterMap <- renderLeaflet({
-    leaflet() %>%
-      addProviderTiles(providers$Esri.WorldImagery) %>%
-      addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
-                     group = "water") %>% 
-      setView(-119.2, 35.38, zoom = 10)
-  })
-
-  water_rast <- reactive({
-    date = input$waterDate
-
-    if (date <= "2023-04-05") {
-      x=1
-    } else if (date <= "2023-04-13") {
-      x=2
-    } else if (date <= "2023-04-29") {
-      x=3
-    } else if (date <="2023-05-23") {
-      x=4
-    } else if (date <="2023-05-31") {
-      x=5
-    } else if (date <="2023-06-16") {
-      x=6
-    } else if (date <="2023-06-24") {
-      x=7
-    } else if (date <="2023-07-10") {
-      x=8
-    } else {
-      x=9
-    }
-
-    rast = r[[x]]
-
-    return(rast)
-  })
-
+  # r = stack(here("data/water/p42_2023_stack.tif"))
+  # 
+  # output$waterMap <- renderLeaflet({
+  #   leaflet() %>%
+  #     addProviderTiles(providers$Esri.WorldImagery) %>%
+  #     addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
+  #                    group = "water") %>% 
+  #     setView(-119.2, 35.38, zoom = 10)
+  # })
+  # 
+  # water_rast <- reactive({
+  #   date = input$waterDate
+  # 
+  #   if (date <= "2023-04-05") {
+  #     x=1
+  #   } else if (date <= "2023-04-13") {
+  #     x=2
+  #   } else if (date <= "2023-04-29") {
+  #     x=3
+  #   } else if (date <="2023-05-23") {
+  #     x=4
+  #   } else if (date <="2023-05-31") {
+  #     x=5
+  #   } else if (date <="2023-06-16") {
+  #     x=6
+  #   } else if (date <="2023-06-24") {
+  #     x=7
+  #   } else if (date <="2023-07-10") {
+  #     x=8
+  #   } else {
+  #     x=9
+  #   }
+  # 
+  #   rast = r[[x]]
+  # 
+  #   return(rast)
+  # })
+  # 
   # test = reactive({r[[paste0("rast_", gsub("-", "_", input$waterDate))]]})
-
-  observe({
-    leafletProxy("waterMap") %>%
-      clearGroup("water") %>%
-      addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
-                     group = "water")
-  })
+  # 
+  # observe({
+  #   leafletProxy("waterMap") %>%
+  #     clearGroup("water") %>%
+  #     addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
+  #                    group = "water")
+  # })
   
   
   ### Zip code box ----------------
@@ -1174,15 +1176,39 @@ function(input, output, session) {
   })
   ivTrap$enable()
 
+  
+  ## Water GIF ------------------
+  output$waterGif <- renderUI({
+    if(!(zipcodeWater_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else {
+      ## Select gif based on zipcode and year
+      gif <- paste0("gifs/zip_", zipcodeWater_d(),
+                    "_", input$waterYear, ".gif")
+      img(src = gif, 
+          height = "450px")
+    }
+  })
+  
+  
+  ## test
+  # output$waterTab_plot <- renderUI({
+  #   img(src = "test.gif",
+  #       height = "450px")
+  # })
+  
+  
+  ## Standing water time series ----------------
+  
   ## Filter water data based on zip input
   waterTab_data <- reactive({
     water_filtered <- water_zip_df %>% 
       filter(zipcode == zipcodeWater_d(),
-             date >= input$water_dateRange[1] & date <= input$water_dateRange[2])
+             year == input$waterYear)
     return(water_filtered)
-  })   
+  })  
   
-  ## Standing water time series
+  ## Plot
   output$waterTab_plot <- renderUI({
     if (!(zipcodeWater_d() %in% zips_sf$zipcode)) {
       return(NULL)
@@ -1191,21 +1217,20 @@ function(input, output, session) {
     } else {
     renderPlot({
       ggplot(data = waterTab_data(), aes(x = date, y = acres_int)) +
-        geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
-        geom_line(linewidth = 0.6, color = "dodgerblue4") +
-        labs(y = "Surface water (acres)",
-             x = element_blank()) +
-        ## customize axis with cont 'date' class data
-        # scale_x_date(limits = as.Date(c('2023-05-07', '2023-06-25')),
-        #              date_breaks = "2 week",
-        #              date_labels = "%b %d") +
-        theme_classic() +
-        theme(
-          # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.text = element_text(size = 13)
-        )
-      })
+          geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
+          geom_line(linewidth = 0.6, color = "dodgerblue4") +
+          labs(y = "Surface water (acres)",
+               x = element_blank()) +
+          ## customize axis with cont 'date' class data
+          scale_x_date(date_breaks = "2 week",
+                       date_labels = "%d %b\n%Y") +
+          theme_classic() +
+          theme(
+            # axis.title.x = element_text(face = "bold", vjust = -1),
+            axis.title.y = element_text(vjust = 2, size = 14),
+            axis.text = element_text(size = 13)
+          ) 
+      }, height = 460)
     }
   })
 

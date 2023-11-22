@@ -323,7 +323,7 @@ dates <- function(files) {
       dplyr::select(date)
  }
 
-rasts <- list.files(path22, pattern = "kern", full.names=FALSE)
+rasts <- list.files(path23, pattern = "kern", full.names=FALSE)
 
 ## Df of all zipcodes
 zips_sf <- read_sf(here("data/zipcodes/kern_zips.shp"))
@@ -336,10 +336,11 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
   ## Add dates, then remove select rasters based on them
   mutate(dates(rasts),
          date = as.character(date),
-         rasts = rep(list.files(path22,pattern="kern",full.names=TRUE),
+         rasts = rep(list.files(path23,pattern="kern",full.names=TRUE),
                      length(zips_list))) %>%  
-  filter(!date %in% c("2022-03-10","2022-06-06","2023-04-22",
-                      "2023-05-08","2023-05-16","2023-06-09","2023-07-03")) %>% 
+  filter(!date %in% c("2022-03-10","2022-06-06","2022-11-13",
+                      "2022-03-13","2023-04-22","2023-05-08",
+                      "2023-05-16","2023-06-09","2023-07-03")) %>% 
   mutate(date_title = lubridate::ymd(date),
          date_title = format(date_title, "%m-%d-%Y"),
          date = gsub("-", "", date)) 
@@ -351,6 +352,7 @@ library(htmlwidgets)
 library(htmltools)
 library(leaflet)
 library(magick)
+library(av)
   
 
 for (j in 1:length(zips_list)) {
@@ -390,7 +392,10 @@ for (j in 1:length(zips_list)) {
           text-align: center;
           padding-left: 10px; 
           padding-right: 10px; 
-          background: rgba(255,255,255,0.5);
+          border-style: solid;
+          border-width: 1.5px;
+          border-color: #222021;
+          background: rgba(255,255,255,0.6);
           font-weight: bold;
           font-size: 15px;
         }
@@ -425,24 +430,29 @@ for (j in 1:length(zips_list)) {
               delay = 1,
               zoom = 4)
     }
-  
-  png_files <- list.files(here("data/water/zips//"),
-                          pattern = zips_list[j])
-  
-  gif_convert <- function(x, output) {
-  image_read(x) %>% 
-    image_animate(fps=1) %>% 
-      ## try out "optimize" and fps arguments
-      ## in this for future run
-    image_write(output)
-  }
-  
-  gif_convert(x= paste0(here("data/water/zips//"), png_files),
-              output = paste0(here("data/water/gifs//"),
-                              "zip_", zips_list[j], "_2022.gif"))
+   
+   ## List all pics of zip code
+   png_files <- list.files(here("data/water/zips//"),
+                          pattern = paste0(zips_list[j], "_2023"),
+                          full.names = TRUE)
+   ## Output .mp4 from images
+   av::av_encode_video(png_files, framerate = 2, 
+                       output = paste0(here("data/water/vids//"),
+                                       "zip_", zips_list[j], "_2023.mp4"))
+  # ## Output .gif from images
+  # gif_convert <- function(x, output) {
+  # image_read(x) %>% 
+  #   image_animate(fps=1) %>% 
+  #     ## try out "optimize" and fps arguments
+  #     ## in this for future run
+  #   image_write(output)
+  # }
+  # 
+  # gif_convert(x= paste0(here("data/water/zips//"), png_files),
+  #             output = paste0(here("data/water/gifs//"),
+  #                             "zip_", zips_list[j], "_2022.gif"))
   
 } 
-
 
 ```
 

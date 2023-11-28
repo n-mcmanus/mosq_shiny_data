@@ -1,5 +1,5 @@
 ---
-title: "test"
+title: "Shiny data prep"
 author: "Nick McManus"
 date: "2023-07-21"
 output: html_document
@@ -8,20 +8,21 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)    ## always
-library(zoo)          ## interpolation
 library(here)         ## consistent file paths
+library(zoo)          ## interpolation of water data
 library(stringr)      ## split up file names
 library(lubridate)    ## mutate dates
 library(terra)        ## better/faster GIS package
-library(sf)           ## format plays nicer w/leaflet
 library(raster)       ## format plays nicer w/leaflet
-library(leaflet)      ## test interactive maps
+library(sf)           ## format plays nicer w/leaflet
+library(leaflet)      ## maps
+library(webshot2)     ## capture leaflet maps as .png
+library(av)           ## convert .png to .mp4
 ```
 
-This markdown is for wrangling and prepping data that goes into the Shiny app.
+This markdown is for wrangling and prepping all the data data that goes into the Shiny app. This includes some code chunks of test plots/maps that will be removed in the future. 
 
-
-## Zip codes
+# Zip codes
 
 We want to find and save the zip codes located within the Central Valley portion of Kern county. This .shp will then be exported for use in the Shiny app.
 
@@ -108,7 +109,7 @@ writeVector(valley, here('data/central_valley/valley.shp'), overwrite = T)
 ```
 
 
-## Standing water
+# Standing water
 
 ### Convert to .tif
 First we need to deal with format of some 2022 Landsat rasters. These are unmarked files types (no file extension) paired with an .hdr file. The unmarked file can only be read with the .hdr file present of the same name. This will make future steps of reading in layers tricky, so first we'll convert all these files to .tif format and remove the original file pairings. 
@@ -349,12 +350,9 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
 
 
 
-library(webshot2)
 # library(htmlwidgets)
 # library(htmltools)
-library(leaflet)
 # library(magick)
-library(av)
   
 ### Loop to create .mp4 for each zip code
 for (j in 1:length(zips_list)) {
@@ -461,7 +459,7 @@ for (j in 1:length(zips_list)) {
 
 
 
-## Temperature
+# Temperature
 
 The mean daily temperature by zip code was extracted from the PRISM dataset using a Google Earth Engine script. This was exported as a CSV with variables for date ("imageID"), zip code ("GEOID10"), and daily mean temperate ("mean"). We'll read in and clean up the CSV, as well as determine if each observation falls w/in the optimal range for WNV transmission. For *Culex tarsalis*, this is between 22.9-25.9C (optimum temp of 23.9 w/95% CI); for *Culex quinquefasciatus*, this is between 23.9-27.1C (optimum 25.2 w/95% CI). Becuse both species are present in Kern, we'll consider the optimal range from 22.9-27.1C (Shocket et al., 2020)
 ```{r}
@@ -530,7 +528,7 @@ ggplot(data = temp3, aes(x = date, y = tmean_f)) +
 
 
 
-## Trap data
+# Trap data
 
 Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plots showing how the number of WNV positives found in traps across a zip code change by month/year.
 
@@ -778,7 +776,7 @@ ggplot()+
 ```
 
 
-## Transmission efficiency
+# Transmission efficiency
 
 Here we'll find an average WNV transmission efficiency for each zipcode.
 *NOTE:* This may be replaced by R0 once the model is done.

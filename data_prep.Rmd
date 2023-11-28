@@ -129,7 +129,7 @@ convert_tif = function(path) {
   file.remove(nontifs)
 }
 
-convert_tif(path = here("data/water/Landsat_Dan/p042r035/2022//"))
+convert_tif(path = here("data/water/Landsat_Dan/newfiles_temp/42r36//"))
 
 ```
 
@@ -350,8 +350,8 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
 
 
 library(webshot2)
-# library(htmlwidgets)
-# library(htmltools)
+library(htmlwidgets)
+library(htmltools)
 library(leaflet)
 # library(magick)
 library(av)

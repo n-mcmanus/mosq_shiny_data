@@ -18,18 +18,14 @@ library(raster)       ## format plays nicer w/leaflet
 library(leaflet)      ## test interactive maps
 ```
 
-
-## DATA WRANGLING
-
-In this section, we'll crop and reproject spatial data as well as find zonal statistics and output dataframes useful for the Shiny.
+This markdown is for wrangling and prepping data that goes into the Shiny app.
 
 
-
-### Zip codes
+## Zip codes
 
 We want to find and save the zip codes located within the Central Valley portion of Kern county. This .shp will then be exported for use in the Shiny app.
 
-*Note*: For the purposes of this app, the extent of zip codes will be cropped to only portions within both Kern county and the Central Valley. To remove artifacts of zip code portions that only slightly intersect with Kern, we'll also remove any zip code with an area below 1,000,000 m^2. To keep the entire geometry of zips that are within Kern, see the commented out code chunk below. 
+*Note*: For the purposes of this app, the extent of zip codes will be cropped to only portions within both Kern county and the Central Valley. To remove artifacts of zip code portions that only slightly intersect with Kern, we'll also remove any zip code with an area below 1,000,000 m^2. To keep the entire geometry of zips that are within Kern, see the commented out code chunk at the end of this section. 
 ```{r}
 ## Read in data w/ 'sf' pkg (easier to filter by attribute).
 ## After filtering, make SpatVect obj (`terra` pkg)
@@ -112,10 +108,10 @@ writeVector(valley, here('data/central_valley/valley.shp'), overwrite = T)
 ```
 
 
-### Standing water
+## Standing water
 
-#### Convert to .tif
-First we need to deal with format of the 2022 Landsat rasters. These are unmarked files types (no file extension) paired with an .hdr file. The unmarked file can only be read with the .hdr file present of the same name. This will make future steps of reading in layers tricky, so first we'll convert all these files to .tif format and remove the original file pairings. 
+### Convert to .tif
+First we need to deal with format of some 2022 Landsat rasters. These are unmarked files types (no file extension) paired with an .hdr file. The unmarked file can only be read with the .hdr file present of the same name. This will make future steps of reading in layers tricky, so first we'll convert all these files to .tif format and remove the original file pairings. 
 ```{r}
 convert_tif = function(path) {
   ## List the non .hdr files (can't be read in)
@@ -137,8 +133,8 @@ convert_tif(path = here("data/water/Landsat_Dan/p042r035/2022//"))
 
 ```
 
-#### Merge images
-Our AOI is split between two Landsat images (rows 35 and row 36 within path 42). First we'll merge them by date, reproject to the crs for Leaflet, and crop to Kern county. 
+### Merge images
+Our AOI is split between two Landsat images (rows 35 and row 36 within path 42). First we'll mask the rasters with the "QA_PIXEL" files to ensure only locations with water have a value of 1. Then, we'll merge the two row images them by date, reproject it the crs for Leaflet, and crop/mask it Kern county. 
 - **NOTE:** Change input/output file paths to 2022 or 2023 depending on year.
 ```{r}
 ## kern county
@@ -202,13 +198,13 @@ waterMerge <- function(rast35, mask35, rast36, mask36, date, kern, pathOut) {
 }
 
 ## Run fxn for all files in directory
-pmap(waterInput_df, waterMerge, kern=kern,
-     pathOut = here("data/water/p042_masked_merged/2023//"), 
-     .progress = TRUE)
+purrr::pmap(waterInput_df, waterMerge, kern=kern,
+            pathOut = here("data/water/p042_masked_merged/2023//"),
+            .progress = TRUE)
 ```
 
 
-#### Zonal stats
+### Zonal stats
 Here we determine how much standing water is present within each zip code for each image date. The larger `waterZonal()` fxn (which contains several more fxns inside) reads in our rasters and vector of interest, reprojects where needed, and iterates the zonal function over all the rasters in a given directory. We'll run this fxn for 2023 and 2022 rasters, then merge the results and export a single .csv.
 ```{r}
 waterZonal <- function(rastPath, vect) {
@@ -220,7 +216,7 @@ waterZonal <- function(rastPath, vect) {
       dplyr::select(date)
     }
     
-    ## One df with all files and dates
+    ## One dataframe with all files and dates
     df <- data.frame("rasts" = list.files(rastPath, pattern="kern")) %>% 
       ## extract date from r35
       mutate(dates(rasts),
@@ -266,6 +262,7 @@ waterStats_df = rbind(waterZonal(rastPath=path22, vect=vect),
 write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
 ```
 
+##### Cloud issues
 There are some cloud issues with masking for standing water. The values for select dates will be replaced by an averaged value from the date prior and following.
 ```{r}
 waterStats_df = read_csv(here("data/water/water_acre_zipcode.csv")) %>% 
@@ -309,7 +306,7 @@ write_csv(water_int_df, here("data/water/water_acre_zipcode.csv"))
 ```
 
 
-#### Water GIF
+### Water GIF
 To stack for a .gif, rasters must be same extent, resolution, and number of rows/columns. First we'll merge path42 rasters by year to determine the common extent between all. Then, each raster will be resampled to have this identical extent, stacked, and saved.
 *NOTE:* Trying to crop/mask them by zipcode, then stack, to see if that runs faster in Shiny.
 ```{r}
@@ -458,7 +455,7 @@ for (j in 1:length(zips_list)) {
 
 
 
-### Temperature
+## Temperature
 
 The mean daily temperature by zip code was extracted from the PRISM dataset using a Google Earth Engine script. This was exported as a CSV with variables for date ("imageID"), zip code ("GEOID10"), and daily mean temperate ("mean"). We'll read in and clean up the CSV, as well as determine if each observation falls w/in the optimal range for WNV transmission. For *Culex tarsalis*, this is between 22.9-25.9C (optimum temp of 23.9 w/95% CI); for *Culex quinquefasciatus*, this is between 23.9-27.1C (optimum 25.2 w/95% CI). Becuse both species are present in Kern, we'll consider the optimal range from 22.9-27.1C (Shocket et al., 2020)
 ```{r}
@@ -483,8 +480,10 @@ temp2 <- temp %>%
   mutate(cx_opt = fct_relevel(cx_opt, levels = c("optimal", "in range", "out range")))
 
 write_csv(temp2, here('data/temp/kern_tmean_20100401_20230930.csv'))
+```
 
-
+Some test plots
+```{r}
 temp3 <- temp2 %>% 
   filter(zipcode == 93252,
          date >= "2022-01-01" & date <= "2022-07-31")
@@ -525,8 +524,7 @@ ggplot(data = temp3, aes(x = date, y = tmean_f)) +
 
 
 
-
-### Trap data
+## Trap data
 
 Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plots showing how the number of WNV positives found in traps across a zip code change by month/year.
 
@@ -774,7 +772,7 @@ ggplot()+
 ```
 
 
-### Transmission efficiency
+## Transmission efficiency
 
 Here we'll find an average WNV transmission efficiency for each zipcode.
 *NOTE:* This may be replaced by R0 once the model is done.
@@ -800,135 +798,3 @@ trans_zonal_zips <- trans_zonal %>%
 
 write_csv(trans_zonal_zips, here('data/transmission_efficiency_zipcodes.csv'))
 ```
-
-
-
-## TEST PLOTS
-
-
-
-Testing out water plot for shiny:
-```{r}
-### ANIMATION?
-library(xts)
-
-date<-seq(as.Date("2015-01-01"), as.Date("2015-01-10"), by="day")
-a<-xts(1:10,order.by=date)
-df = data.frame(Lat = rnorm(1)+10, Long = rnorm(1),Id=a)
-
-data_a<-data.frame(a)
-data_a1<-data_a %>%  
-  mutate("Lat" =as.numeric(df[1,1]),"Long"=as.numeric(df[2,1]),"Date"=rownames(data_a))
-```
-
-
-```{r}
-water_zip_df <- read_csv(here('data/water/water_acre_zipcode.csv'))
-
-user_input <- "93311"
-user_year <- "2023"
-
-data_filtered <- water_zip_df %>% 
-  filter(zipcode == user_input &
-         year == user_year)
-
-
-p<- ggplot(data_filtered, aes(x = date, y = acres_int)) +
-  geom_point(aes(group=seq_along(date)), color = "dodgerblue3", size = 3, alpha = 0.6) +
-  geom_point(color = "dodgerblue3", size = 4) +
-  geom_line(linewidth = 0.7, color = "dodgerblue4") +
-  labs(y = "Surface water (acres)",
-       x = "Date (2023)") +
-  scale_x_date(date_breaks = "2 week",
-                       date_labels = "%d %b")+
-    ## customize axis with cont 'date' class data
-  # scale_x_date(limits = as.Date(c('2023-03-13', '2023-06-25')),
-  #              date_breaks = "1 week",
-  #              date_labels = "%b %d") +
-  theme_classic() +
-  theme(
-    # axis.title.x = element_text(face = "bold", vjust = -1),
-    axis.title.y = element_text(vjust = 2, size = 14),
-    axis.title.x = element_text(vjust = -1, size = 13),
-    axis.text.y = element_text(size = 13),
-    axis.text.x = element_text(size = 11)
-  ) +
-  transition_reveal(date)
-p
-animate(p, fps = 50, nframes = 700, end_pause = 100)
-
-anim_save("test.gif", animate(p, fps = 50, nframes = 700, end_pause = 100))
-
-
-
-p + geom_line() +
-  geom_point(aes(group = seq_along(date)), color = "dodgerblue3", size = 4) +
-  transition_reveal(date)
-
-anim2 <- ggplot(airquality, aes(Day, Temp, group = Month)) +
-  geom_line() +
-  geom_point(aes(group = seq_along(Day))) +
-  geom_point(colour = 'red', size = 3) +
-  transition_reveal(Day)
-
-anim2
-```
-
-
-
-
-
-
-```{r}
-water <- raster(here('data/water/time_series/LC09_CU_003011_20230625_20230701_02_DSWE_Binary2_T.tif'))
-water_reproj <- projectRaster(water, crs = crs(trans_r), method = 'ngb')
-names(water_reproj) <- "water_reproj"
-water_reproj[water_reproj == 0] <- NA
-
-writeRaster(water_reproj, here('data/water/water_reproj.tif'))
-```
-
-
-Testing leaflet outside of Shiny app
-
-```{r}
-wnv_trans <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
-
-pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
-                    reverse = TRUE,
-                    na.color = "transparent")
-
-
-zips <- read_sf(here("data/zipcodes/kern_zips.shp"))
-
-leaflet() %>% 
-  ## Add background maps
-  addTiles(group = "OpenStreetMaps") %>% 
-  addProviderTiles(providers$Stamen.TonerLite, group = "Toner Lite") %>%
-  ## Add rasters
-  addRasterImage(wnv_trans, colors = pal, project = FALSE, group = "WNV Risk") %>%
-  # addRasterImage(water_reproj, colors = 'dodgerblue4', project = FALSE, group = "Water") %>% 
-  ## Add polygons
-  addPolygons(data = zips, color = "#343434", 
-              weight = 2, fillOpacity = 0.2,
-              label = paste0("Zip code: ", zips$zipcode),
-              group = "Zip codes",
-              highlightOptions = highlightOptions(weight = 5,
-                                               color = "white",
-                                               bringToFront = TRUE)) %>% 
-  ## Add groups to map
-  addLayersControl(
-    baseGroups = c("OpenStreetMaps", "Toner Lite"),
-    overlayGroups = c("WNV Risk", "Zip codes", "Water"),
-    options = layersControlOptions(collapsed = T),
-    position = "topleft"
-  ) %>% 
-  hideGroup("Zip codes") %>% 
-  ## Add legend to map
-  addLegend(pal = pal, values = values(wnv_trans),
-            "bottomleft",
-            title = "WNV Transmission Risk")%>% 
-      setView(-119.3, 35.55, zoom = 11)
-
-```
-

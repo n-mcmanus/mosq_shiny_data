@@ -306,13 +306,19 @@ write_csv(water_int_df, here("data/water/water_acre_zipcode.csv"))
 ```
 
 
-### Water GIF
-To stack for a .gif, rasters must be same extent, resolution, and number of rows/columns. First we'll merge path42 rasters by year to determine the common extent between all. Then, each raster will be resampled to have this identical extent, stacked, and saved.
-*NOTE:* Trying to crop/mask them by zipcode, then stack, to see if that runs faster in Shiny.
+### Animate rasters
+Here we'll generate a movie (.mp4) that goes through a time series of standing water images by zip code. This is done creating a series of maps using `leaflet`, capturing those maps as images (.png), and finally converting the images into an .mp4. 
+
+- **NOTE:** This was originally done as a .gif, but the file sizes were far to big to host them all on the Shiny. The code for converting .png to .gif (rather than .mp4) in commented out at the end of the fxn for reference. 
 ```{r}
+## List all rasters
 path23 = here("data/water/p042_masked_merged/2023//")
 path22 = here("data/water/p042_masked_merged/2022//")
 
+rasts <- list.files(path22, pattern = "kern", full.names=FALSE) %>% 
+  append(., list.files(path23, pattern="kern", full.names=FALSE))
+
+## Fxn to extract date from file name
 dates <- function(files) {
       str_split(files, "_", simplify = TRUE) %>% 
       as.data.frame() %>%
@@ -320,12 +326,9 @@ dates <- function(files) {
       dplyr::select(date)
  }
 
-rasts <- list.files(path23, pattern = "kern", full.names=FALSE)
-
-## Df of all zipcodes
+## df of all zipcodes
 zips_sf <- read_sf(here("data/zipcodes/kern_zips.shp"))
 zips_list = unique(zips_sf$zipcode)
-
 
 ## df of file paths and dates of rasters to be visualized
 rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
@@ -333,8 +336,10 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
   ## Add dates, then remove select rasters based on them
   mutate(dates(rasts),
          date = as.character(date),
-         rasts = rep(list.files(path23,pattern="kern",full.names=TRUE),
-                     length(zips_list))) %>%  
+         rasts = rep(list.files(here("data/water/p042_masked_merged/"),
+                                pattern="kern", recursive = TRUE, 
+                                full.names=TRUE),
+                     length(zips_list))) %>% 
   filter(!date %in% c("2022-03-10","2022-06-06","2022-11-13",
                       "2022-03-13","2023-04-22","2023-05-08",
                       "2023-05-16","2023-06-09","2023-07-03")) %>% 
@@ -345,97 +350,98 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
 
 
 library(webshot2)
-library(htmlwidgets)
-library(htmltools)
+# library(htmlwidgets)
+# library(htmltools)
 library(leaflet)
-library(magick)
+# library(magick)
 library(av)
   
-
+### Loop to create .mp4 for each zip code
 for (j in 1:length(zips_list)) {
-  
+  ## Only look at rasters for one zip at a time
   rasts_filter <- rasts_df %>% 
     filter(zipcode == zips_list[j])
   
+  ## Shows progress in console for user
   print(paste0("Working on zipcode: ", zips_list[j]))
   
-    for(i in 1:nrow(rasts_filter))
-  {
-      ## Read in each raster and zipcode as vect
-      r <- rast(rasts_filter$rasts[i])
-      values(r)[values(r) == 0] <- NA
-
-      zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>%
-        filter(zipcode == rasts_filter$zipcode[i]) %>%
-        vect() %>%
-        project(y=crs(r))
-
-      ## crop/mask raster to zipcode
-      r_crop <- r %>%
-        crop(x=., y=zip, mask = TRUE)
-      r_crop <- raster(r_crop)
-
-      geom <- zips_sf %>%
-        filter(zipcode == rasts_filter$zipcode[i])
-      bounds <- geom %>%
-        st_bbox() %>%
-        as.character()
-      
-      tag.map.title <- tags$style(HTML("
-        .leaflet-control.map-title { 
-          transform: translate(-50%,20%);
-          position: fixed !important;
-          left: 50%;
-          text-align: center;
-          padding-left: 10px; 
-          padding-right: 10px; 
-          border-style: solid;
-          border-width: 1.5px;
-          border-color: #222021;
-          background: rgba(255,255,255,0.6);
-          font-weight: bold;
-          font-size: 15px;
-        }
-      "))
-
-        title <- tags$div(
-          tag.map.title, rasts_filter$date_title[i]
-        )  
-
-      ## add raster to map
-      m <- leaflet(options = leafletOptions(zoomControl = FALSE)) %>%
-        addProviderTiles(providers$Esri.WorldImagery) %>%
-        ##zips outline bottom layer
-        addMapPane("zips", zIndex = 410) %>%
-        addMapPane("water", zIndex = 415) %>%
-        addRasterImage(r_crop, colors = "blue", 
-                       project = TRUE, options=pathOptions(pane="water")) %>%
-        addPolylines(stroke=TRUE, weight = 2, color="black",
-                   fill = TRUE, fillColor = "white", fillOpacity = 0.5,
-                   data = geom, options=pathOptions(pane="zips")) %>%
-        fitBounds(lng1 = bounds[1], lat1 = bounds[2],
-                  lng2 = bounds[3], lat2 = bounds[4]) %>%
-        addControl(title, position = "topright", className="map-title")
-
-      ## save map as .png
-      saveWidget(m, here("data/water/temp/temp.html"), selfcontained = TRUE)
-      webshot(here("data/water/temp/temp.html"),
-              file = paste0(here("data/water/zips//"),
-                            sprintf("zip_%02s_", rasts_filter$zipcode[i]),
-                            sprintf("%02s.png", rasts_filter$date[i])), 
-              cliprect = "viewport",
-              delay = 1,
-              zoom = 4)
-    }
+      ## Save leaflet map as .png for each date  
+      for(i in 1:nrow(rasts_filter)) {
+        ## Read in each raster and zipcode as vect
+        r <- rast(rasts_filter$rasts[i])
+        values(r)[values(r) == 0] <- NA
+  
+        zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>%
+          filter(zipcode == rasts_filter$zipcode[i]) %>%
+          vect() %>%
+          project(y=crs(r))
+  
+        ## crop/mask raster to zipcode
+        r_crop <- r %>%
+          crop(x=., y=zip, mask = TRUE)
+        r_crop <- raster(r_crop)
+        
+        ## Limit map bounds to zipcode
+        geom <- zips_sf %>%
+          filter(zipcode == rasts_filter$zipcode[i])
+        bounds <- geom %>%
+          st_bbox() %>%
+          as.character()
+        
+        ## Style for date box on map
+        tag.map.title <- tags$style(HTML("
+          .leaflet-control.map-title { 
+            transform: translate(-50%,20%);
+            position: fixed !important;
+            left: 50%;
+            text-align: center;
+            padding-left: 10px; 
+            padding-right: 10px; 
+            border-style: solid;
+            border-width: 1.5px;
+            border-color: #222021;
+            background: rgba(255,255,255,0.6);
+            font-weight: bold;
+            font-size: 15px;
+          }"))
+          title <- tags$div(
+            tag.map.title, rasts_filter$date_title[i]
+          )  
+  
+        ## add raster to map
+        m <- leaflet(options = leafletOptions(zoomControl = FALSE)) %>%
+          addProviderTiles(providers$Esri.WorldImagery) %>%
+          ##zips outline bottom layer
+          addMapPane("zips", zIndex = 410) %>%
+          addMapPane("water", zIndex = 415) %>%
+          addRasterImage(r_crop, colors = "blue", 
+                         project = TRUE, options=pathOptions(pane="water")) %>%
+          addPolylines(stroke=TRUE, weight = 2, color="black",
+                     fill = TRUE, fillColor = "white", fillOpacity = 0.5,
+                     data = geom, options=pathOptions(pane="zips")) %>%
+          fitBounds(lng1 = bounds[1], lat1 = bounds[2],
+                    lng2 = bounds[3], lat2 = bounds[4]) %>%
+          addControl(title, position = "topright", className="map-title")
+  
+        ## save map as .png
+        saveWidget(m, here("data/water/temp/temp.html"), selfcontained = TRUE)
+        webshot(here("data/water/temp/temp.html"),
+                file = paste0(here("data/water/zips//"),
+                              sprintf("zip_%02s_", rasts_filter$zipcode[i]),
+                              sprintf("%02s.png", rasts_filter$date[i])), 
+                cliprect = "viewport",
+                delay = 1,
+                zoom = 4)
+      }##END inner loop
    
    ## List all pics of zip code
    png_files <- list.files(here("data/water/zips//"),
-                          pattern = paste0(zips_list[j], "_2023"),
+                          pattern = zips_list[j],
                           full.names = TRUE)
    ## Output .mp4 from images
    av::av_encode_video(png_files, framerate = 2, 
                        output = paste0(here("data/water/vids//"),
-                                       "zip_", zips_list[j], "_2023.mp4"))
+                                       "zip_", zips_list[j], "_2022_2023.mp4"))
   # ## Output .gif from images
   # gif_convert <- function(x, output) {
   # image_read(x) %>% 
@@ -449,7 +455,7 @@ for (j in 1:length(zips_list)) {
   #             output = paste0(here("data/water/gifs//"),
   #                             "zip_", zips_list[j], "_2022.gif"))
   
-} 
+} ##END outer loop
 
 ```
 

@@ -173,19 +173,19 @@ navbarPage(title = "MBD in Kern County", id = "nav",
                         )),
                hr(style = 'border-top: 1.5px solid #2d3e50; 
                   margin: 0px -250px 20px 0px')
-             ), ## End main panel
+             ),##End main panel
              
-               # mainPanel(
-                 fluidRow(
-                   column(width = 5, style='padding-left:30px;',
-                          uiOutput("waterGif")),
-                   column(width = 6, 
-                   style='padding-left: 70px',
-                   uiOutput("waterTab_plot"))
-                 )
-               
-             
-             
+             fluidRow(
+               ## water .mp4
+               column(width = 5, 
+                      style='padding-left:30px;',
+                      uiOutput("waterVid")),
+               ## Line plot
+               column(width = 6,
+                      style='padding-left: 70px',
+                      uiOutput("waterTab_plot"))
+               )
+
           ), ## END TAB 3
     
     

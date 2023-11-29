@@ -346,7 +346,7 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
                      length(zips_list))) %>% 
   filter(!date %in% c("2022-03-10","2022-06-06","2022-11-13",
                       "2022-03-13","2023-04-22","2023-05-08",
-                      "2023-05-16","2023-06-09","2023-07-03")) %>% 
+                      "2023-05-16","2023-06-09","2023-07-03", "2023-09-21")) %>% 
   mutate(date_title = lubridate::ymd(date),
          date_title = format(date_title, "%m-%d-%Y"),
          date = gsub("-", "", date)) 

@@ -257,7 +257,8 @@ vect <- vect(here("data/zipcodes/kern_zips.shp"))
 
 ## Run fxn for 2023 and 2022 and bind results to one df
 waterStats_df = rbind(waterZonal(rastPath=path22, vect=vect),
-                      waterZonal(rastPath=path23, vect=vect))
+                      waterZonal(rastPath=path23, vect=vect)) %>% 
+  mutate(date_plot = format(as.Date(date), '%b-%d-%Y'))
 
 ## export as .csv
 write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))

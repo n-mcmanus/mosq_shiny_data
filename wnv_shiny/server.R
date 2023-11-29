@@ -5,7 +5,7 @@ library(shinyalert)    ## Modals
 library(shinyvalidate) ## Text box validation messages
 library(tidyverse)     ## Always
 library(here)          ## Easier reading/writing data
-library(gganimate)     ## plot animations
+library(ggiraph)       ## interactive plots
 library(lubridate)     ## Wrangling/plotting dates
 library(leaflet)       ## Interactive map
 library(raster)        ## Leaflet-friendly raster pkg
@@ -44,31 +44,31 @@ function(input, output, session) {
   
   ## WELCOME MODAL -----------------------------------------------------------
   
-  ## Initial modal on app launch
-  shinyalert(
-    title = "Welcome",
-    text = paste0("This app lets you explore the risks and hazards associated with mosquito-borne diseases (MBD) in Kern County, California. Information by zip code* can be explored by either manually entering the zip code of interest, or by clicking the location on the map.", "<br>", "<br>", "For more information on MBD transmission, select the 'More Info' button or click on the information icon at the top of the page.", "<br>", "<br>", "<span style='font-size: 13px;'>", "<i>", "*(Note: Zip code boundaries have been limited to the extent present within both Kern County and the California Central Valley. These boundaries can be visually toggled by (un)selecting layers listed at the top left of the map.", "</i>", ")",  "</span>"),
-    size = "m", 
-    closeOnEsc = TRUE,
-    closeOnClickOutside = TRUE,
-    html = TRUE,
-    type = "",
-    showConfirmButton = TRUE,
-    showCancelButton = TRUE,
-    confirmButtonText = "More Info",
-    confirmButtonCol = "#AEDEF4",
-    cancelButtonText = "View Map",
-    timer = 0,
-    imageUrl = "",
-    animation = TRUE
-  )
-
-  ## Go to "info" tab if button pressed
-  observeEvent(input$shinyalert, {
-    if (input$shinyalert == TRUE) {
-      updateNavbarPage(session, "nav", selected = "tab4")
-    }
-  })
+  # ## Initial modal on app launch
+  # shinyalert(
+  #   title = "Welcome",
+  #   text = paste0("This app lets you explore the risks and hazards associated with mosquito-borne diseases (MBD) in Kern County, California. Information by zip code* can be explored by either manually entering the zip code of interest, or by clicking the location on the map.", "<br>", "<br>", "For more information on MBD transmission, select the 'More Info' button or click on the information icon at the top of the page.", "<br>", "<br>", "<span style='font-size: 13px;'>", "<i>", "*(Note: Zip code boundaries have been limited to the extent present within both Kern County and the California Central Valley. These boundaries can be visually toggled by (un)selecting layers listed at the top left of the map.", "</i>", ")",  "</span>"),
+  #   size = "m", 
+  #   closeOnEsc = TRUE,
+  #   closeOnClickOutside = TRUE,
+  #   html = TRUE,
+  #   type = "",
+  #   showConfirmButton = TRUE,
+  #   showCancelButton = TRUE,
+  #   confirmButtonText = "More Info",
+  #   confirmButtonCol = "#AEDEF4",
+  #   cancelButtonText = "View Map",
+  #   timer = 0,
+  #   imageUrl = "",
+  #   animation = TRUE
+  # )
+  # 
+  # ## Go to "info" tab if button pressed
+  # observeEvent(input$shinyalert, {
+  #   if (input$shinyalert == TRUE) {
+  #     updateNavbarPage(session, "nav", selected = "tab4")
+  #   }
+  # })
   
   
   # TAB 1 - Trap Data ##########################################################
@@ -647,7 +647,7 @@ function(input, output, session) {
     if(!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
-      paste("<b>","Fig. 3: Average minimum infection rates (MIR) for West Nile (top) and St. Lois Encephalitis (bottom) viruses within Kern County.","</b>", "The orange and yellow bars displays average weekly MIR for WNV and SLEV, respectivley, within zip code ", zipcodeTrap_d(), " between ", input$trap_dateRange[1], " and ", input$trap_dateRange[2], ". The dashed black line represents the average MIR within this time period across all Kern zip codes, while the dashed purple line shows average MIR in zip code ", zipcodeTrap_d(), " from 2010 to present.")
+      paste("<b>","Fig. 3: Average minimum infection rates (MIR) for West Nile (top) and St. Louis Encephalitis (bottom) viruses within Kern County.","</b>", "The orange and yellow bars displays average weekly MIR for WNV and SLEV, respectivley, within zip code ", zipcodeTrap_d(), " between ", input$trap_dateRange[1], " and ", input$trap_dateRange[2], ". The dashed black line represents the average MIR within this time period across all Kern zip codes, while the dashed purple line shows average MIR in zip code ", zipcodeTrap_d(), " from 2010 to present.")
     }
   })
   
@@ -768,8 +768,8 @@ function(input, output, session) {
                   ~ if(input$risk_dateRange[1] < "2010-04-01") 
                     "Start date must be after 2010-04-01.")
   ivTemp$add_rule("risk_dateRange", 
-                  ~ if(input$risk_dateRange[2] > "2023-09-30") 
-                    "End date must be before 2023-09-30.")
+                  ~ if(input$risk_dateRange[2] > "2023-11-30") 
+                    "End date must be before 2023-11-30.")
   
   ivTemp$enable()
   
@@ -1106,54 +1106,7 @@ function(input, output, session) {
   
   
   # TAB 3 - Standing Water ##################################################
-  # r = stack(here("data/water/p42_2023_stack.tif"))
-  # 
-  # output$waterMap <- renderLeaflet({
-  #   leaflet() %>%
-  #     addProviderTiles(providers$Esri.WorldImagery) %>%
-  #     addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
-  #                    group = "water") %>% 
-  #     setView(-119.2, 35.38, zoom = 10)
-  # })
-  # 
-  # water_rast <- reactive({
-  #   date = input$waterDate
-  # 
-  #   if (date <= "2023-04-05") {
-  #     x=1
-  #   } else if (date <= "2023-04-13") {
-  #     x=2
-  #   } else if (date <= "2023-04-29") {
-  #     x=3
-  #   } else if (date <="2023-05-23") {
-  #     x=4
-  #   } else if (date <="2023-05-31") {
-  #     x=5
-  #   } else if (date <="2023-06-16") {
-  #     x=6
-  #   } else if (date <="2023-06-24") {
-  #     x=7
-  #   } else if (date <="2023-07-10") {
-  #     x=8
-  #   } else {
-  #     x=9
-  #   }
-  # 
-  #   rast = r[[x]]
-  # 
-  #   return(rast)
-  # })
-  # 
-  # test = reactive({r[[paste0("rast_", gsub("-", "_", input$waterDate))]]})
-  # 
-  # observe({
-  #   leafletProxy("waterMap") %>%
-  #     clearGroup("water") %>%
-  #     addRasterImage(water_rast(), colors = 'dodgerblue4', project = FALSE,
-  #                    group = "water")
-  # })
-  
-  
+
   ### Zip code box ----------------
   ## React to user input and slightly delay response
   zipcodeWater <- reactive(input$zip_box_water)
@@ -1177,25 +1130,18 @@ function(input, output, session) {
   ivTrap$enable()
 
   
-  ## Water GIF ------------------
-  output$waterGif <- renderUI({
+  ## Water video ------------------
+  output$waterVid <- renderUI({
     if(!(zipcodeWater_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       ## Select gif based on zipcode and year
-      gif <- paste0("gifs/zip_", zipcodeWater_d(),
-                    "_", input$waterYear, ".gif")
-      img(src = gif, 
-          height = "450px")
+      vid <- paste0("vids/zip_", zipcodeWater_d(),
+                    "_2022_2023.mp4")
+      tags$video(src = vid, 
+          height = "440px", autoplay = TRUE, controls = TRUE)
     }
   })
-  
-  
-  ## test
-  # output$waterTab_plot <- renderUI({
-  #   img(src = "test.gif",
-  #       height = "450px")
-  # })
   
   
   ## Standing water time series ----------------
@@ -1203,8 +1149,8 @@ function(input, output, session) {
   ## Filter water data based on zip input
   waterTab_data <- reactive({
     water_filtered <- water_zip_df %>% 
-      filter(zipcode == zipcodeWater_d(),
-             year == input$waterYear)
+      filter(zipcode == zipcodeWater_d())
+             # year == input$waterYear)
     return(water_filtered)
   })  
   
@@ -1215,22 +1161,34 @@ function(input, output, session) {
     } else if (length(waterTab_data()$acres_int)==0) {
       strong("No water data available for this time.")
     } else {
-    renderPlot({
-      ggplot(data = waterTab_data(), aes(x = date, y = acres_int)) +
-          geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
-          geom_line(linewidth = 0.6, color = "dodgerblue4") +
+      renderGirafe({
+      waterPlot <- ggplot(data = waterTab_data(), aes(x = date, y = acres_int)) +
+          geom_point_interactive(color = "dodgerblue3", size = 4, alpha = 0.6,
+                     ## interactive elements
+                     aes(tooltip = paste0(waterTab_data()$date_plot,
+                                          "\n", round(waterTab_data()$acres_int,2),
+                                          " acres"), 
+                         size = 1.5,
+                         tooltip_fill = "dodgerblue4",
+                         hover_nearest=TRUE)
+                     ) +
+          geom_line_interactive(linewidth = 0.6, color = "dodgerblue4") +
           labs(y = "Surface water (acres)",
                x = element_blank()) +
           ## customize axis with cont 'date' class data
-          scale_x_date(date_breaks = "2 week",
-                       date_labels = "%d %b\n%Y") +
-          theme_classic() +
+          scale_x_date(date_breaks = "2 month",
+                       date_labels = "%d %b\n%Y")+
+          theme_minimal() +
           theme(
             # axis.title.x = element_text(face = "bold", vjust = -1),
             axis.title.y = element_text(vjust = 2, size = 14),
             axis.text = element_text(size = 13)
-          ) 
-      }, height = 460)
+          )
+      x <- girafe(ggobj = waterPlot,
+             height_svg = 7, width_svg = 9)
+      x <- girafe_options(x, opts_zoom(min = 1, max = 2.5),
+                          opts_tooltip(use_fill=TRUE, opacity = 0.8))
+      })
     }
   })
 

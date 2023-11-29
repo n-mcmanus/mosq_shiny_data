@@ -280,7 +280,8 @@ water_int_df = waterStats_df %>%
                                            "2022-11-13",
                                            "2023-04-22",
                                            "2023-06-09",
-                                           "2023-07-03") 
+                                           "2023-07-03",
+                                           "2023-09-21") 
                                ~((lead(acres, n = 1)+lag(acres, n = 1))/2),
                                ## B/c these dates have larger gaps on either side, 
                                ## replace w/NA then interpolate
@@ -294,7 +295,8 @@ water_int_df = waterStats_df %>%
                                             "2022-11-13",
                                             "2023-04-22",
                                             "2023-06-09",
-                                            "2023-07-03") 
+                                            "2023-07-03",
+                                            "2023-09-21") 
                                 ~(round(((lead(ncells, n = 1)+lag(ncells, n = 1))/2),0)),
                                date %in% c("2023-03-13",
                                            "2023-05-08",

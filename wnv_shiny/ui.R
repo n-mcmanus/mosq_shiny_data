@@ -14,8 +14,10 @@ navbarPage(title = "MBD in Kern County", id = "nav",
     ## TAB 1: WNV TRAP CASES ---------------------------------------------------
     tabPanel("Mosquito Data",
              value = "tab1",
-             h2("Mosquito Abundance and Diseases"),
-             p("Mosquito-borne diseases (MBD) and abundance data comes from monitoring and testing efforts of the ", tags$a(href="https://www.kernmosquito.com/", "Kern Mosquito and Vector Control District."),  "Mosquito traps are deployed at various locations in Kern county and checked regularly. These pools of trapped mosquitos are then counted and tested for a range of mosquito-borne diseases. To standardize for monitoring effort, abundance and MBD cases are reported as mosquitos per trap night and minimum infection rate (MIR), respectively. For more details on mosquito species and MBD, click on the", actionLink("link_to_info", "information icon"), "in the navigation bar."),
+             h2("Mosquito Abundance and Diseases",
+                style = 'margin-top:-5px; padding-left: 15px'),
+             p("Mosquito-borne diseases (MBD) and abundance data comes from monitoring and testing efforts of the ", tags$a(href="https://www.kernmosquito.com/", "Kern Mosquito and Vector Control District."),  "Mosquito traps are deployed at various locations in Kern county and checked regularly. These pools of trapped mosquitos are then counted and tested for a range of mosquito-borne diseases. To standardize for monitoring effort, abundance and MBD cases are reported as mosquitos per trap night and minimum infection rate (MIR), respectively. For more details on mosquito species and MBD, click on the", actionLink("link_to_info", "information icon"), "in the navigation bar.",
+               style='padding-left: 15px; padding-right: 10px'),
              ### Side Panel: 
              sidebarPanel(
                # h3(strong("Trap data:")),
@@ -25,14 +27,6 @@ navbarPage(title = "MBD in Kern County", id = "nav",
                          placeholder = "Enter your zip code..."
                ),
                br(),
-  
-               ### Abundance/WNV:
-               # radioButtons("trapRadio", label = h4("Metric:"),
-               #              inline = TRUE,
-               #              choices = c("Abundance" = "abundance",
-               #                          "WNV cases" = "wnv")),
-               
-               
                
                h4(strong("Time period:")),
                # p("Quick selection:"),
@@ -155,36 +149,68 @@ navbarPage(title = "MBD in Kern County", id = "nav",
     
     
     ## TAB 3: STANDING WATER  --------------------------------------------------
-    tabPanel("Standing water",
+    tabPanel("Surface water",
              value = "tab3",
+             h2("Surface Water in Kern County",
+                style = 'margin-top:-5px; padding-left: 15px'),
+             sidebarPanel(
+               p("Here you can explore the changes in surface water between 2022-2023. Either select a zip code on the map to the right or enter one in the box below to see when and where surface water was present. Surface water can provide breeding habitat for mosquitoes; therefore, proximity to slow-moving or standing water may result in increased mosquito abundance and mosquito-borne disease risk. For more information, please visit the 'Info' tab."),
+               br(),
+               ## Zip code
+               textInput(inputId = "zip_box_water",
+                         label = h4(strong("Zip code:")),
+                         value = NULL,
+                         placeholder = "Enter your zip code...")
+             ),
              mainPanel(
-               p("Here you can explore the changes of standing water over time. Enter a Kern county zip code and select a year in the boxes below to see when and where standing water was present. Standing water can provide breeding habitat for mosquitoes; therefore, proximity to standing water may result in increased mosquito abundance and mosquito-borne disease risk. For more information, please visit the 'Info' tab."),
-               fluidRow(
-                 column(width = 4,
-                        textInput(inputId = "zip_box_water", label = strong("Zip code:"),
-                                  value = NULL,
-                                  placeholder = "Enter your zip code...")
-                        ),
-                 column(width = 4,
-                        selectInput("waterYear", label = strong("Year:"),
-                                    choices = list("2023" = "2023",
-                                                   "2022" = "2022"),
-                                    selected = "2023")
-                        )),
-               hr(style = 'border-top: 1.5px solid #2d3e50; 
-                  margin: 0px -250px 20px 0px')
-             ),##End main panel
+               leafletOutput("waterMap", height = "350px", width = "800px"),
+               br()
+             ),
              
              fluidRow(
                ## water .mp4
-               column(width = 5, 
-                      style='padding-left:30px;',
-                      uiOutput("waterVid")),
+               column(width = 5,
+                      uiOutput("waterVid"),
+                      style = 'padding-left: 30px'),
                ## Line plot
-               column(width = 6,
-                      style='padding-left: 70px',
+               column(width = 7,
+                      # style='padding-left: -1700px',
                       uiOutput("waterTab_plot"))
-               )
+             ) 
+             
+             
+             # mainPanel(
+             #   fluidRow(
+             #     column(width = 6,
+             #            h2("Surface water in Kern County"),
+             #            br(),
+             #            p("Here you can explore the changes in surface water between 2022-2023. Either select a zip code on the map to the right, or enter a Kern county zip code in the boxes below to see when and where standing water was present. Surface water can provide breeding habitat for mosquitoes; therefore, proximity to slow-moving or standing water may result in increased mosquito abundance and mosquito-borne disease risk. For more information, please visit the 'Info' tab."),
+             #            br(),
+             #            ## Zip code
+             #            textInput(inputId = "zip_box_water",
+             #                      label = strong("Zip code:"),
+             #                      value = NULL,
+             #                      placeholder = "Enter your zip code...")
+             #            ),
+             #     column(width = 6,
+             #            br(),
+             #            leafletOutput("waterMap", height = "350px", width = "800px"))
+             #     ),##End rows
+             #   br(),
+             #   br()
+             #   ),##End main panel
+             # mainPanel(
+             #   fluidRow(
+             #     ## water .mp4
+             #     column(width = 5,
+             #            uiOutput("waterVid")),
+             #     ## Line plot
+             #     column(width = 6,
+             #            # style='padding-left: 170px',
+             #            uiOutput("waterTab_plot"))
+             #   ) 
+             #   
+             # )
 
           ), ## END TAB 3
     
@@ -195,7 +221,8 @@ navbarPage(title = "MBD in Kern County", id = "nav",
     tabPanel(title = NULL, icon = icon("info-circle", "fa-1.5x"),
              value = "tab4",
              mainPanel(width = 10,
-               h3("Information:"),
+               h2("Information:",
+                  style = 'margin-top:-5px'),
                p(),
                
                bsCollapse(id="collapsePanels",

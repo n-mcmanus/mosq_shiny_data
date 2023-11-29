@@ -1128,6 +1128,82 @@ function(input, output, session) {
     } 
   })
   ivTrap$enable()
+  
+  ## WATER MAP ------------------------------------------------------------
+  output$waterMap <- renderLeaflet({
+    leaflet() %>% 
+      ## Add background maps
+      addTiles(group = "OpenStreetMaps") %>% 
+      addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
+      
+      ### Zip codes
+      addPolygons(data = zips_sf, color = "#343434",
+                  weight = 2, fillOpacity = 0.1,
+                  label = paste0("Zip code: ", zips_sf$zipcode),
+                  labelOptions = labelOptions(textsize = "11px"),
+                  highlight = highlightOptions(weight = 5,
+                                               color = "white",
+                                               bringToFront = TRUE),
+                  group = "Zip codes",
+                  layerId = ~zipcode) %>%  
+      
+      ### Kern county
+      addPolylines(data = kern_sf,
+                   color = 'black', weight = 4, fillOpacity = 0,
+                   group = "Kern county") %>% 
+      
+      ### Central valley
+      addPolylines(data = valley_sf,
+                   color = 'blue', weight = 2.5, fillOpacity = 0,
+                   group = "Central Valley") %>%
+      
+      ## Create map groups
+      addLayersControl(
+        baseGroups = c("OpenStreetMaps", "World Imagery"),
+        overlayGroups = c("Zip codes", "Kern county", "Central Valley"),
+        options = layersControlOptions(collapsed = TRUE),
+        position = "topleft") %>% 
+      
+      ## Don't show all layers by default
+      hideGroup(c("Kern county")) %>%
+
+      setView(-119.2, 35.38, zoom = 9)
+  }) ##END LEAFLET
+  
+  ### Interactive Leaflet elements: 
+  ## Click on zip code polygon to input value in text box
+  observe({
+    event <- input$waterMap_shape_click
+    if(is.null(event$id))
+      return()
+    
+    ## change text box value
+    updateTextInput(session, 
+                    inputId = "zip_box_water", 
+                    value = event$id)
+  })
+  
+  ## Zoom and highlight zip code
+  observe({
+    ## establish zip code boundaries
+    geom <- zips_sf %>%
+      dplyr::filter(zipcode == input$zip_box_water)
+    bounds <- geom %>%
+      st_bbox() %>%
+      as.character()
+    
+    ## Update map
+    leafletProxy("waterMap") %>%
+      clearGroup("highlighted_polygon") %>%
+      ## zoom to zip
+      flyToBounds(lng1 = bounds[1], lat1 = bounds[2],
+                  lng2 = bounds[3], lat2 = bounds[4]) %>%
+      ## highlight selected zip
+      addPolylines(stroke=TRUE, weight = 5, color="yellow",
+                   fill = TRUE, fillColor = "white", fillOpacity = 0.4,
+                   data = geom, group = "highlighted_polygon")
+  })
+  
 
   
   ## Water video ------------------
@@ -1177,15 +1253,15 @@ function(input, output, session) {
                x = element_blank()) +
           ## customize axis with cont 'date' class data
           scale_x_date(date_breaks = "2 month",
-                       date_labels = "%d %b\n%Y")+
+                       date_labels = "%b\n%Y")+
           theme_minimal() +
           theme(
             # axis.title.x = element_text(face = "bold", vjust = -1),
-            axis.title.y = element_text(vjust = 2, size = 14),
-            axis.text = element_text(size = 13)
+            axis.title.y = element_text(vjust = 2, size = 12),
+            axis.text = element_text(size = 10)
           )
-      x <- girafe(ggobj = waterPlot,
-             height_svg = 7, width_svg = 9)
+      x <- girafe(ggobj = waterPlot)
+             # height_svg = 7, width_svg = 9)
       x <- girafe_options(x, opts_zoom(min = 1, max = 2.5),
                           opts_tooltip(use_fill=TRUE, opacity = 0.8))
       })

@@ -16,6 +16,8 @@ library(terra)        ## better/faster GIS package
 library(raster)       ## format plays nicer w/leaflet
 library(sf)           ## format plays nicer w/leaflet
 library(leaflet)      ## maps
+library(htmlwidgets)  ## better map
+library(htmltools)    ## better map
 library(webshot2)     ## capture leaflet maps as .png
 library(av)           ## convert .png to .mp4
 ```

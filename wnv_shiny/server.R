@@ -177,7 +177,7 @@ function(input, output, session) {
   }) ## END LEAFLET
   
   
-  ### Interactive Leaflet elements: 
+  ### Interactive Leaflet elements:  -----------------------
   ## Click on zip code polygon to input value in text box
   observe({
     event <- input$trapMap_shape_click
@@ -189,6 +189,7 @@ function(input, output, session) {
                     inputId = "zip_box_trap", 
                     value = event$id)
   })
+  
   
   ## Zoom and highlight zip code
   observe({
@@ -211,6 +212,42 @@ function(input, output, session) {
                    data = geom, group = "highlighted_polygon")
   })
   
+  ## TEST UPDATE COLORS FOR WNV
+  observe({
+    ## List w/pos MIR during time range
+    wnvPos <- wnv_df %>% 
+      dplyr::filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2]) %>% 
+      dplyr::filter(mir_all > 0) %>% 
+      dplyr::filter(!is.na(zipcode))
+    
+    slevPos <- slev_df %>% 
+      dplyr::filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2]) %>% 
+      dplyr::filter(mir_all > 0) %>% 
+      dplyr::filter(!is.na(zipcode))
+    
+    ## Filter zips to keep those with pos WNV
+    wnvZips <- zips_sf %>% 
+      dplyr::filter(zipcode %in% wnvPos$zipcode)
+    
+    slevZips <- zips_sf %>% 
+      dplyr::filter(zipcode %in% slevPos$zipcode)
+    
+    
+    ##update map
+    leafletProxy("trapMap") %>% 
+      clearGroup("wnvPos") %>% 
+      addPolygons(stroke = TRUE, weight = 2, color = "#8b4726",
+                  fill = TRUE, fillColor = "#ee7942", fillOpacity = 0.3,
+                  label = paste0("Zip code: ", wnvZips$zipcode),
+                  labelOptions = labelOptions(textsize = "11px"),
+                  highlight = highlightOptions(weight = 5,
+                                               color = "white",
+                                               bringToFront = TRUE),
+                   data = wnvZips, group = "wnvPos",
+                  layerId = ~zipcode)
+    
+  })
+  
   
   ## Reactive caption for map
   output$trapMap_caption <- renderText({
@@ -219,7 +256,7 @@ function(input, output, session) {
   
   
   
-  ### Filter Trap Data ----------------------------------------------------
+  ## Filter Trap Data ----------------------------------------------------
   ## Abundance -----------------
   ### Filtered abundance by time and zip
   abund_data <- reactive ({
@@ -254,7 +291,7 @@ function(input, output, session) {
   
   
   ## WNV MIR  --------------------
-  ### Filtered mir by time and zip
+  ### Filtered MIR by time and zip
   wnv_data <- reactive ({
     df <- wnv_df %>% 
       filter(zipcode == zipcodeTrap_d(),
@@ -274,7 +311,7 @@ function(input, output, session) {
     return(xMean)
   })
   
-  ### Avg abund for time (all Kern)
+  ### Avg MIR for time (all Kern)
   avgWnv_kern <- reactive ({
     x <- wnv_df %>% 
       filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2])

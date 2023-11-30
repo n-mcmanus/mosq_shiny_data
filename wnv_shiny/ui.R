@@ -153,6 +153,7 @@ navbarPage(title = "MBD in Kern County", id = "nav",
              value = "tab3",
              h2("Surface Water in Kern County",
                 style = 'margin-top:-5px; padding-left: 15px'),
+             
              sidebarPanel(
                p("Here you can explore the changes in surface water between 2022-2023. Either select a zip code on the map to the right or enter one in the box below to see when and where surface water was present. Surface water can provide breeding habitat for mosquitoes; therefore, proximity to slow-moving or standing water may result in increased mosquito abundance and mosquito-borne disease risk. For more information, please visit the 'Info' tab."),
                br(),
@@ -161,57 +162,24 @@ navbarPage(title = "MBD in Kern County", id = "nav",
                          label = h4(strong("Zip code:")),
                          value = NULL,
                          placeholder = "Enter your zip code...")
-             ),
+             ),##End sidebarpanel
+             
+             ## Interactive Map
              mainPanel(
                leafletOutput("waterMap", height = "350px", width = "800px"),
                br()
              ),
              
+             ## Video and plot
              fluidRow(
-               ## water .mp4
                column(width = 5,
                       uiOutput("waterVid"),
                       style = 'padding-left: 30px'),
-               ## Line plot
                column(width = 7,
                       # style='padding-left: -1700px',
                       uiOutput("waterTab_plot"))
-             ) 
+             )
              
-             
-             # mainPanel(
-             #   fluidRow(
-             #     column(width = 6,
-             #            h2("Surface water in Kern County"),
-             #            br(),
-             #            p("Here you can explore the changes in surface water between 2022-2023. Either select a zip code on the map to the right, or enter a Kern county zip code in the boxes below to see when and where standing water was present. Surface water can provide breeding habitat for mosquitoes; therefore, proximity to slow-moving or standing water may result in increased mosquito abundance and mosquito-borne disease risk. For more information, please visit the 'Info' tab."),
-             #            br(),
-             #            ## Zip code
-             #            textInput(inputId = "zip_box_water",
-             #                      label = strong("Zip code:"),
-             #                      value = NULL,
-             #                      placeholder = "Enter your zip code...")
-             #            ),
-             #     column(width = 6,
-             #            br(),
-             #            leafletOutput("waterMap", height = "350px", width = "800px"))
-             #     ),##End rows
-             #   br(),
-             #   br()
-             #   ),##End main panel
-             # mainPanel(
-             #   fluidRow(
-             #     ## water .mp4
-             #     column(width = 5,
-             #            uiOutput("waterVid")),
-             #     ## Line plot
-             #     column(width = 6,
-             #            # style='padding-left: 170px',
-             #            uiOutput("waterTab_plot"))
-             #   ) 
-             #   
-             # )
-
           ), ## END TAB 3
     
     

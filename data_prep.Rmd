@@ -274,9 +274,9 @@ waterStats_df = read_csv(here("data/water/water_acre_zipcode.csv")) %>%
 
 water_int_df = waterStats_df %>% 
   group_by(zipcode) %>% 
-  ## remove first bad date complete 
+  ## remove first/last bad dates
   ## (not enough info to interpolate)
-  filter(date != "2022-03-10") %>%
+  filter(!date %in% c("2022-03-10", "2023-11-08", "2023-11-16")) %>% 
   ## For four dates, just avg values directly before/after
   mutate(acres_int = case_when(date %in% c("2022-06-06",
                                            "2022-11-13",
@@ -636,6 +636,30 @@ abund <- read_csv(here('data/traps/andy/all1500LagWeeks0_NA.csv')) %>%
          .before = year)
 write_csv(abund, here("data/traps/plotting/abundance_plotting.csv"))
 ```
+
+
+```{r}
+wnv <- read_csv(here("data/traps/plotting/wnvMIR_plotting.csv"))
+
+startDate <- "2020-01-01"
+endDate <- "2020-12-31"
+
+wnvDates <- wnv %>% 
+  filter(date >= startDate & date <= endDate) %>% 
+  filter(mir_all > 0) %>% 
+  filter(!is.na(zipcode))
+
+posZips <- unique(wnvDates$zipcode)
+
+zipInput <- "93311"
+
+ifelse(zipInput %in% posZips, "yes", "no")
+
+
+wnvZips <- zips_sf %>% 
+      dplyr::filter(zipcode %in% wnvDates$zipcode)
+```
+
 
 
 

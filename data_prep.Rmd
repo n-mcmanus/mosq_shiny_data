@@ -312,6 +312,54 @@ write_csv(water_int_df, here("data/water/water_acre_zipcode.csv"))
 ```
 
 
+### Water persistence raster
+Here we'll perform some simple "raster math" to get a better idea of how frequently certain areas of Kern County are flooded.
+```{r}
+## List all rasters
+path23 = here("data/water/p042_masked_merged/2023//")
+path22 = here("data/water/p042_masked_merged/2022//")
+
+rasts <- list.files(path22, pattern = "kern", full.names=FALSE) %>% 
+  append(., list.files(path23, pattern="kern", full.names=FALSE))
+
+## Fxn to extract date from file name
+dates <- function(files) {
+      str_split(files, "_", simplify = TRUE) %>% 
+      as.data.frame() %>%
+      mutate(date = lubridate::ymd(V3)) %>%
+      dplyr::select(date)
+}
+## Filter out bad dates from raster list
+rasts_df <- data.frame(rasts = rasts,
+                       date = dates(rasts)) %>% 
+  mutate(rasts = list.files(here("data/water/p042_masked_merged/"),
+                                pattern="kern", recursive = TRUE, 
+                                full.names=TRUE)) %>% 
+  dplyr::filter(!date %in% c("2022-03-10","2022-06-06","2022-11-13",
+                             "2023-03-13","2023-04-22","2023-05-08",
+                             "2023-05-16","2023-06-09","2023-07-03", 
+                             "2023-09-21","2023-11-08","2023-11-16"))
+
+## Make all rasters same extent ---------------
+## sample raster 
+sample_r <- rast(rasts_df$rasts[1])
+
+## "stack" resampled rasters in terra-friendly format
+rasts_list <- terra::rast(
+  lapply(rasts_df$rasts, function(x) {
+    r <- rast(x) %>%
+      resample(y = sample_r, 
+               ##categorical (water/no water)
+               method = "near")
+    })
+  )
+
+## add stack and export
+rasts_sum <- sum(rasts_list)
+writeRaster(rasts_sum, here("data/water/summed_water_2022_2023.tif"))
+```
+
+
 ### Animate rasters
 Here we'll generate a movie (.mp4) that goes through a time series of standing water images by zip code. This is done creating a series of maps using `leaflet`, capturing those maps as images (.png), and finally converting the images into an .mp4. 
 
@@ -347,7 +395,7 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
                                 full.names=TRUE),
                      length(zips_list))) %>% 
   filter(!date %in% c("2022-03-10","2022-06-06","2022-11-13",
-                      "2022-03-13","2023-04-22","2023-05-08",
+                      "2023-03-13","2023-04-22","2023-05-08",
                       "2023-05-16","2023-06-09","2023-07-03", "2023-09-21")) %>% 
   mutate(date_title = lubridate::ymd(date),
          date_title = format(date_title, "%m-%d-%Y"),

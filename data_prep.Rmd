@@ -354,9 +354,12 @@ rasts_list <- terra::rast(
     })
   )
 
-## add stack and export
+## Add stack, then replace 0 with NA
 rasts_sum <- sum(rasts_list)
-writeRaster(rasts_sum, here("data/water/summed_water_2022_2023.tif"))
+rasts_sum_na <- classify(rasts_sum, cbind(0, NA))
+
+## Save
+writeRaster(rasts_sum_na, here("data/water/summed_water_2022_2023.tif"))
 ```
 
 

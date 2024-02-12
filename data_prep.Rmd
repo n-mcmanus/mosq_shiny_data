@@ -574,7 +574,7 @@ temp_tidy <- temp %>%
   ## find temp in F
   mutate(tmean_f = (tmean_c*(9/5))+32,
          .before = date) %>% 
-  ## does a day fall w/in optimal temp range?
+  ## does a day fall w/in optimal range for culex?
   mutate(cx_opt = case_when(tmean_c >= 12.1 & tmean_c < 22.9 ~ "in range",
                             tmean_c >= 22.9 & tmean_c <= 27.1 ~ "optimal",
                             tmean_c > 27.1 & tmean_c <=31.9 ~ "in range",

@@ -7,15 +7,20 @@ library(shinyalert)    ## Modals
 library(shinyvalidate) ## Text box validation messages
 library(tidyverse)     ## Always
 library(here)          ## Easier reading/writing data
-library(ggiraph)       ## interactive plots
 library(lubridate)     ## Wrangling/plotting dates
 library(leaflet)       ## Interactive map
 library(raster)        ## Leaflet-friendly raster pkg
 library(sf)            ## Leaflet-friendly vector pkg
 
 ## Rasters
-# wnv_trans <- raster(here('data/Kern_transmission_raster_wgs84.tif'))
-# water <- raster(here('data/water/water_reproj.tif'))
+# water_r <- raster(here('data/water/summed_water_2022_2023.tif'))
+water_90_r <- raster(here('data/water/summed_water_2022_2023_90m.tif'))
+# r0_r <- raster(here('data/r0.tif'))
+## Raster color palette
+# pal <- colorBin(palette = 'viridis', domain = values(water_r),
+#                 na.color = "transparent")
+pal90 <- colorBin(palette = 'viridis', domain = values(water_90_r),
+                  na.color = "transparent")
 
 ## Vectors
 zips_sf <- st_read(here('data/zipcodes/kern_zips.shp'))
@@ -24,7 +29,7 @@ valley_sf <- st_read(here('data/central_valley/valley.shp'))
 
 ## Data frames
 water_zip_df <- read_csv(here("data/water/water_acre_zipcode.csv"))
-r0_zip_df <- read_csv(here("data/transmission_efficiency_zipcodes.csv"))
+# r0_zip_df <- read_csv(here("data/r0.csv"))
 wnv_df <- read_csv(here("data/traps/plotting/wnvMIR_plotting.csv"))
 slev_df <- read_csv(here("data/traps/plotting/slevMIR_plotting.csv"))
 abund_df <- read_csv(here('data/traps/plotting/abundance_plotting.csv')) %>% 
@@ -33,15 +38,11 @@ temp_zip_df <- read_csv(here('data/temp/kern_tmean_20100401_20230930.csv')) %>%
   mutate(cx_opt = factor(cx_opt),
          cx_opt = fct_relevel(cx_opt, "optimal", "in range", "out range"))
 
-## Raster color palette
-# pal <- colorNumeric(palette = 'viridis', domain = values(wnv_trans),
-#                     reverse = TRUE,
-#                     na.color = "transparent")
 
 # START SERVER
 function(input, output, session) {
   
-  ## WELCOME MODAL -----------------------------------------------------------
+  # WELCOME MODAL -----------------------------------------------------------
   
   # ## Initial modal on app launch
   # shinyalert(
@@ -69,13 +70,17 @@ function(input, output, session) {
   #   }
   # })
   
-  # TAB 1 - Trap Data ##########################################################
-  observeEvent(input$link_to_info, {
-    newValue <- "tab4"
-    updateTabItems(session, "nav", newValue)
-  })
+  # TAB 1: TRAP DATA ##########################################################
   
-  ## RESPONSIVE SIDE PANEL WIDGETS --------------------
+  ## Example for how to hyperlink to different tab
+  ## Can use later if needed
+  # observeEvent(input$link_to_info, {
+  #   newValue <- "tab4"
+  #   updateTabItems(session, "nav", newValue)
+  # })
+  
+  
+  ## MAP SIDE PANEL WIDGETS ----------------------
   
   ### Zip code box ----------------
   ## React to user input and slightly delay response
@@ -100,40 +105,57 @@ function(input, output, session) {
   ivTrap$enable()
   
   
-  ### Trap date selection ----------------
+  ### Trap date selection -----------
   observe({
+    ## Last year (2023) incomplete so limit through Sep
     if (input$trapMonth == "none" & input$trapYear == "2023") {
       updateDateRangeInput(session, "trap_dateRange",
                            start = paste(input$trapYear, "01-01", sep = "-"),
                            end = paste(input$trapYear, "09-30", sep = "-"))
+      ## First year (2010) only has data from March onward
     } else if (input$trapMonth == "none" & input$trapYear == "2010") {
       updateDateRangeInput(session, "trap_dateRange",
                            start = paste(input$trapYear, "03-01", sep = "-"),
                            end = paste(input$trapYear, "12-31", sep = "-"))
+      ## For all other years, list entire year
     } else if (input$trapMonth == "none") {
       updateDateRangeInput(session, "trap_dateRange",
                            start = paste(input$trapYear, "01-01", sep = "-"),
                            end = paste(input$trapYear, "12-31", sep = "-"))
+      ## If month is selected, then stick to just that year/month
     } else {
       updateDateRangeInput(session, "trap_dateRange",
-                           start = paste(input$trapYear, input$trapMonth, "01", sep = "-"),
-                           end = paste(input$trapYear, input$trapMonth, "31", sep = "-"))
+                           start = paste(input$trapYear, 
+                                         input$trapMonth, 
+                                         "01", 
+                                         sep = "-"),
+                           end = paste(input$trapYear, 
+                                       input$trapMonth, 
+                                       "31", 
+                                       sep = "-"))
     }
   })  
   
   
   ## TRAP MAP ------------------------------------------------------------
   output$trapMap <- renderLeaflet({
-    leaflet() %>% 
-      ## Add background maps
+    leaflet(options = leafletOptions(zoomControl = FALSE)) %>%
+      ## place zoom ctrl buttons on upper right
+      ## otherwize blocks sidebar button
+      htmlwidgets::onRender("function(el, x) {
+        L.control.zoom({ position: 'topright' }).addTo(this)}") %>% 
+      
+      ## Add background maps, default OSM
       addTiles(group = "OpenStreetMaps") %>% 
       addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
       
-      ### Zip codes
+      ### Kern zip codes
       addPolygons(data = zips_sf, color = "#343434",
                   weight = 2, fillOpacity = 0.05,
+                  ## Hover label
                   label = paste0("Zip code: ", zips_sf$zipcode),
                   labelOptions = labelOptions(textsize = "11px"),
+                  ## Hover highlight
                   highlight = highlightOptions(weight = 5,
                                                color = "white",
                                                bringToFront = TRUE),
@@ -150,25 +172,25 @@ function(input, output, session) {
                    color = 'blue', weight = 2.5, fillOpacity = 0,
                    group = "Central Valley") %>%
       
-      ## Create map groups
+      ## Map groups/layers box
       addLayersControl(
         baseGroups = c("OpenStreetMaps", "World Imagery"),
         overlayGroups = c("Zip codes", "Kern county", "Central Valley"),
         options = layersControlOptions(collapsed = TRUE),
-        position = "topleft") %>% 
-      
+        position = "topright") %>% 
       ## Don't show all layers by default
       hideGroup(c("Kern county")) %>% 
       
-      ## Add map inset
+      ## Map inset
       addMiniMap(
         tiles = providers$Esri.WorldStreetMap,
         zoomLevelOffset = -5,
         position = 'bottomright',
         toggleDisplay = TRUE) %>% 
       
+      ## Set map to AOI
       setView(-119.2, 35.38, zoom = 9)
-  }) ## END LEAFLET
+  }) ## END LEAFLET MAP
   
   
   ### Interactive Leaflet elements:  -----------------------
@@ -177,17 +199,15 @@ function(input, output, session) {
     event <- input$trapMap_shape_click
     if(is.null(event$id))
       return()
-    
     ## change text box value
     updateTextInput(session, 
                     inputId = "zip_box_trap", 
                     value = event$id)
   })
   
-  
-  ## Zoom and highlight zip code
+  ## Highlight and zoom to zip code
   observe({
-    ## establish zip code boundaries
+    ## First establish zip code boundaries
     geom <- zips_sf %>%
       dplyr::filter(zipcode == input$zip_box_trap)
     bounds <- geom %>%
@@ -196,6 +216,7 @@ function(input, output, session) {
     
     ## Update map
     leafletProxy("trapMap") %>%
+      ## remove previously selected zip
       clearGroup("highlighted_polygon") %>%
       ## zoom to zip
       flyToBounds(lng1 = bounds[1], lat1 = bounds[2],
@@ -209,27 +230,27 @@ function(input, output, session) {
   ## TEST UPDATE COLORS FOR WNV
   # observe({
   #   ## List w/pos MIR during time range
-  #   wnvPos <- wnv_df %>% 
-  #     dplyr::filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2]) %>% 
-  #     dplyr::filter(mir_all > 0) %>% 
+  #   wnvPos <- wnv_df %>%
+  #     dplyr::filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2]) %>%
+  #     dplyr::filter(mir_all > 0) %>%
   #     dplyr::filter(!is.na(zipcode))
-  #   
-  #   slevPos <- slev_df %>% 
-  #     dplyr::filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2]) %>% 
-  #     dplyr::filter(mir_all > 0) %>% 
+  # 
+  #   slevPos <- slev_df %>%
+  #     dplyr::filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2]) %>%
+  #     dplyr::filter(mir_all > 0) %>%
   #     dplyr::filter(!is.na(zipcode))
-  #   
+  # 
   #   ## Filter zips to keep those with pos WNV
-  #   wnvZips <- zips_sf %>% 
+  #   wnvZips <- zips_sf %>%
   #     dplyr::filter(zipcode %in% wnvPos$zipcode)
-  #   
-  #   slevZips <- zips_sf %>% 
+  # 
+  #   slevZips <- zips_sf %>%
   #     dplyr::filter(zipcode %in% slevPos$zipcode)
-  #   
-  #   
+  # 
+  # 
   #   ##update map
-  #   leafletProxy("trapMap") %>% 
-  #     clearGroup("wnvPos") %>% 
+  #   leafletProxy("trapMap") %>%
+  #     clearGroup("wnvPos") %>%
   #     addPolygons(stroke = TRUE, weight = 2, color = "#8b4726",
   #                 fill = TRUE, fillColor = "#ee7942", fillOpacity = 0.4,
   #                 label = paste0("Zip code: ", wnvZips$zipcode),
@@ -239,20 +260,15 @@ function(input, output, session) {
   #                                              bringToFront = TRUE),
   #                  data = wnvZips, group = "wnvPos",
   #                 layerId = ~zipcode)
-  #   
+  # 
   # })
   
   
-  ## Reactive caption for map
-  output$trapMap_caption <- renderText({
-    paste("<b>","Figure 1:","</b>","Interactive map of zip codes within the Central Valley and Kern County, California. The selected zip code is outline in yellow, and the border for the central valley is shown in blue. Borders for Kern County and the central valley can be toggled using the map options in the upper left corner.")
-  })
   
   
-  
-  ## Filter Trap Data ----------------------------------------------------
-  ## Abundance -----------------
-  ### Filtered abundance by time and zip
+  ## FILTER DATA ----------------------------------------------------
+  ### Abundance -------------------
+  ## Filtered abundance by time and zip
   abund_data <- reactive ({
     df <- abund_df %>% 
       filter(zipcode == zipcodeTrap_d(),
@@ -263,7 +279,7 @@ function(input, output, session) {
     return(df)
   })
   
-  ### Avg abund for zip (all time)
+  ## Avg abund for zip (all time)
   avgAbund_zip <- reactive ({
     x <- abund_df %>% 
       filter(zipcode == zipcodeTrap_d())
@@ -273,7 +289,7 @@ function(input, output, session) {
     return(xMean)
   })
   
-  ### Avg abund for time (all Kern)
+  ## Avg abund for time period (all Kern)
   avgAbund_kern <- reactive ({
     x <- abund_df %>% 
       filter(date >= input$trap_dateRange[1] & date <= input$trap_dateRange[2])
@@ -284,8 +300,8 @@ function(input, output, session) {
   })
   
   
-  ## WNV MIR  --------------------
-  ### Filtered MIR by time and zip
+  ### WNV MIR  --------------------
+  ## Filtered MIR by time and zip
   wnv_data <- reactive ({
     df <- wnv_df %>% 
       filter(zipcode == zipcodeTrap_d(),
@@ -295,7 +311,7 @@ function(input, output, session) {
     return(df)
   })
   
-  ### Avg MIR for zip (all time)
+  ## Avg MIR for zip (all time)
   avgWnv_zip <- reactive ({
     x <- wnv_df %>% 
       filter(zipcode == zipcodeTrap_d())
@@ -305,7 +321,7 @@ function(input, output, session) {
     return(xMean)
   })
   
-  ### Avg MIR for time (all Kern)
+  ## Avg MIR for time (all Kern)
   avgWnv_kern <- reactive ({
     x <- wnv_df %>% 
       filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2])
@@ -316,8 +332,8 @@ function(input, output, session) {
   })
   
   
-  ## SLEV MIR  --------------------
-  ### Filtered slev by time and zip
+  ### SLEV MIR  --------------------
+  ## Filtered slev by time and zip
   slev_data <- reactive ({
     df <- slev_df %>% 
       filter(zipcode == zipcodeTrap_d(),
@@ -327,7 +343,7 @@ function(input, output, session) {
     return(df)
   })
   
-  ### Avg SLEV for zip (all time)
+  ## Avg SLEV for zip (all time)
   avgSlev_zip <- reactive ({
     x <- slev_df %>% 
       filter(zipcode == zipcodeTrap_d())
@@ -337,7 +353,7 @@ function(input, output, session) {
     return(xMean)
   })
   
-  ### Avg abund for time (all Kern)
+  ## Avg abund for time (all Kern)
   avgSlev_kern <- reactive ({
     x <- slev_df %>% 
       filter(date>=input$trap_dateRange[1] & date<=input$trap_dateRange[2])
@@ -348,595 +364,447 @@ function(input, output, session) {
   })
   
   
-  ### Plots ----------------------------------------------------
- 
-  ##test plot
-  # output$abund_plot <- renderUI({
-  #   card(
-  #     card_header(
-  #       "Mosquito abundance:",
-  #       tooltip(
-  #         bsicons::bs_icon("info-circle"),
-  #         "Info on abundance metric.",
-  #         placement = "right"
-  #       )
-  #     ),
-  #     renderPlot({
-  #       ggplot(data = abund_data(), aes(x = date, y = cases)) +
-  #         ## Kern avg (in time period):
-  #         geom_hline(yintercept = avgAbund_kern(),
-  #                    color = "black", linetype = "dashed", linewidth = 0.8) +
-  #         
-  #         ## Zip avg (all time):
-  #         geom_hline(yintercept = avgAbund_zip(),
-  #                    color = "purple", linetype = "dashed", linewidth = 0.8) +
-  #         ## Filtered zip/time data
-  #         geom_line(color = "seagreen4", linewidth = 0.8) +
-  #         geom_point(color = "seagreen3", size = 3, alpha = 0.8) +
-  #         labs(y = "Average weekly abundance",
-  #              x = element_blank()) +
-  #         scale_x_date(date_labels = "%d %b %y",
-  #                      breaks = unique(abund_data()$date)) +
-  #         theme_classic() +
-  #         theme(
-  #           axis.title.y = element_text(vjust = 2, size = 14),
-  #           axis.title.x = element_text(vjust = -1, size = 14),
-  #           axis.text = element_text(size = 13)) 
-  #     })
-  #   )
-  #   
-  # })
-  
-  
-  output$twoplots <- renderUI({
+  ## PLOTS ----------------------------------------------------
+  output$trapPlots <- renderUI({
+    ## Don't generate until zip selected
     if (!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
       return(NULL)
-      ## If no data, no plot
     } else {
-    layout_column_wrap(
-      width = 1/2,
-      height = "470px",
-      ## Abundance plot
-      card(
-        full_screen = TRUE,
-        card_header("Mosquito abundance:",
-                    popover(
-                      trigger = bs_icon("question-circle"),
-                      placement = "right",
-                      "Due to the large number of traps in Kern county and variability in collection frequency, mosquito abundance is standardized as “mosquitoes per trap night”, or:",
-                      withMathJax("$$\\scriptsize{\\frac{\\text{Total number individuals}}{\\text{Number nights since last collection}}}$$"),
-                      "This value is then averaged across all traps in a given area (zip code or county) by week. As such, reported average abundance values do not represent the total number of mosquitoes present in a week, but rather a standardized metric that can be used to track relative changes in abundance over time.")
-                    ),
-        card_body(uiOutput("abund_plot"),
-                  fill = TRUE,
-                  padding = "5px"
-                  ),
-        # card_footer(
-        #   htmlOutput("abundPlot_caption")
-        # )
-      ), 
-      ## MIR plots
-      card(
-        full_screen = TRUE,
-        card_header("Infection rates:",
-                    popover(
-                      trigger = bs_icon("question-circle"),
-                      placement = "right",
-                      "Minimum infection rate (MIR) is a common method used to estimate infection rates in mosquito populations. Mosquitoes are trapped and tested in groups, or “pools”. MIR assumes that if a tested pool comes back positive for a MBD, only one mosquito in the pool is infected. Reported MIR values can be interpreted as:  “At minimum, X number of mosquitoes were infected during week Y.” ",
-                      withMathJax("$$\\scriptsize{MIR = \\frac{\\text{Number Positive Pools}} {\\text{Total Number Individuals}}*1000}$$"),
-                      )
-                    ),
-        card_body(
-          uiOutput("mir_plots")
+      ## Makes 2 equally sized cards
+      layout_column_wrap(
+        width = 1/2,
+        height = "640px",
+        ## Abundance plot
+        card(
+          full_screen = TRUE,
+          ## Header with popover text
+          card_header(
+            "Mosquito abundance:",
+            popover(
+              trigger = bs_icon("question-circle"),
+              "Due to the large number of traps in Kern county and variability in collection frequency, mosquito abundance is standardized as “mosquitoes per trap night”, or:",
+              withMathJax("$$\\scriptsize{\\frac{\\text{Total number individuals}}{\\text{Number nights since last collection}}}$$"),
+              "This value is then averaged across all traps in a given area (zip code or county) by week. As such, reported average abundance values do not represent the total number of mosquitoes present in a week, but rather a standardized metric that can be used to track relative changes in abundance over time."
+            ),
+            class = "d-flex justify-content-between"
+          ),
+          ## Body w/reactive plot
+          card_body(
+            ## If no data, don't make plot
+            if (length(abund_data()$abund_woy_avg) == 0) {
+              strong("No abundance data available for this location and time.")
+            } else {
+              plotlyOutput("abund_plot")
+            }),
+          ## Footer w/reactive text
+          card_footer(htmlOutput("abundPlot_caption"))
+        ),
+        ## MIR plots
+        card(
+          full_screen = TRUE,
+          ## Header w/popover text
+          card_header(
+            "Infection rates:",
+            popover(
+              trigger = bs_icon("question-circle"),
+              placement = "right",
+              "Minimum infection rate (MIR) is a common method used to estimate infection rates in mosquito populations. Mosquitoes are trapped and tested in groups, or “pools”. MIR assumes that if a tested pool comes back positive for a MBD, only one mosquito in the pool is infected. Reported MIR values can be interpreted as:  “At minimum, X number of mosquitoes were infected during week Y.” ",
+              withMathJax("$$\\scriptsize{MIR = \\frac{\\text{Number Positive Pools}} {\\text{Total Number Individuals}}*1000}$$"),
+            ),
+            class = "d-flex justify-content-between"
+          ),
+          ## body w/plot
+          card_body(
+            ## Don't plot if no data
+            if (length(wnv_data()$mir_avg) == 0) {
+              strong("No infection data available for this location and time.")
+            } else {
+              plotlyOutput("mir_plots")
+            }),
+          ## footer w/reactive text
+          card_footer(htmlOutput("mirPlot_caption"))
+        )
+      )##End column wrap
+    }
+  })##End plot
+  
+  
+  
+  ### Abundance plot ------------------
+  output$abund_plot <- renderPlotly({
+    p <- ggplot(data = abund_data(),
+                aes(x = date, y = abund_woy_avg)) +
+      ## Kern avg (in time period):
+      geom_hline(
+        yintercept = avgAbund_kern(),
+        color = "black",
+        linetype = "dashed",
+        linewidth = 0.5
+      ) +
+      ## Zip avg (all time):
+      geom_hline(
+        yintercept = avgAbund_zip(),
+        color = "purple",
+        linetype = "dashed",
+        linewidth = 0.5
+      ) +
+      ## Filtered abund data
+      geom_line(color = "seagreen4", linewidth = 0.8) +
+      ## change point size based on time scale
+      (if (difftime(input$trap_dateRange[2],
+                    input$trap_dateRange[1]) <= 62) {
+        geom_point(
+          color = "seagreen3",
+          size = 3,
+          alpha = 0.8,
+          aes(text = paste0(
+            "Week:  ",
+            date,
+            "<br>",
+            "Average abundance:  ",
+            round(abund_woy_avg, 2)
+          ))
+        )
+      } else if (difftime(input$trap_dateRange[2],
+                          input$trap_dateRange[1]) <= 365) {
+        geom_point(
+          color = "seagreen3",
+          size = 3,
+          alpha = 0.8,
+          aes(text = paste0(
+            "Week:  ",
+            date,
+            "<br>",
+            "Average abundance:  ",
+            round(abund_woy_avg, 2)
+          ))
+        )
+      } else if (difftime(input$trap_dateRange[2],
+                          input$trap_dateRange[1]) <= 730) {
+        geom_point(
+          color = "seagreen3",
+          size = 2,
+          alpha = 0.8,
+          aes(text = paste0(
+            "Week:  ",
+            date,
+            "<br>",
+            "Average abundance:  ",
+            round(abund_woy_avg, 2)
+          ))
+        )
+      } else if (difftime(input$trap_dateRange[2],
+                          input$trap_dateRange[1]) <= 1461) {
+        geom_point(
+          color = "seagreen3",
+          size = 1.5,
+          alpha = 0.8,
+          aes(text = paste0(
+            "Week:  ",
+            date,
+            "<br>",
+            "Average abundance:  ",
+            round(abund_woy_avg, 2)
+          ))
+        )
+      } else {
+        geom_point(
+          color = "seagreen3",
+          size = 1,
+          alpha = 0.8,
+          aes(text = paste0(
+            "Week:  ",
+            date,
+            "<br>",
+            "Average abundance:  ",
+            round(abund_woy_avg, 2)
+          ))
+        )
+      }) +
+      ## show full date and tick for each week if short time period
+      (if (difftime(input$trap_dateRange[2],
+                    input$trap_dateRange[1]) <= 62) {
+        scale_x_date(date_labels = "%d %b %y",
+                     breaks = unique(abund_data()$date))
+      } else if (difftime(input$trap_dateRange[2],
+                          input$trap_dateRange[1]) <= 365) {
+        scale_x_date(date_labels = "%b %y",
+                     date_breaks = "1 month")
+      } else if (difftime(input$trap_dateRange[2],
+                          input$trap_dateRange[1]) <= 730) {
+        scale_x_date(date_labels = "%b\n%y",
+                     date_breaks = "2 month")
+      } else if (difftime(input$trap_dateRange[2],
+                          input$trap_dateRange[1]) <= 1461) {
+        scale_x_date(date_labels = "%b\n%y",
+                     date_breaks = "3 month")
+      } else {
+        scale_x_date(date_labels = "%b\n%y",
+                     date_breaks = "6 month")
+      }) +
+      ## Plot labels/aesthetics
+      labs(y = "Average weekly abundance",
+           x = element_blank()) +
+      theme_classic() +
+      theme(axis.title.y = element_text(vjust = 2, size = 12),
+            axis.text = element_text(size = 10))
+    
+    ## Wrap the whole thing in plotly
+    ggplotly(p, tooltip = c("text")) %>%
+      config(
+        displaylogo = FALSE,
+        ## Customize menu buttons
+        modeBarButtonsToRemove = c(
+          "select2d",
+          "lasso2d",
+          "resetScale2d",
+          "hoverClosestCartesian",
+          "hoverCompareCartesian"
         )
       )
-    )
-    }
-  })
+  }) ##END abund plot
   
   
-  
-   ## Abundance plot
-  output$abund_plot <- renderUI({
-    if (length(abund_data()$abund_woy_avg)==0) {
-      strong("No abundance data available for this location and time.")
-      ## If plotting under two months
-    } else if (difftime(input$trap_dateRange[2],
-                        input$trap_dateRange[1]) <= 62) {
-      renderPlotly({
-        p <- ggplot(data = abund_data(), aes(x = date, y = abund_woy_avg)) +
-          ## Kern avg (in time period):
-          geom_hline(yintercept = avgAbund_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-
-          ## Zip avg (all time):
-          geom_hline(yintercept = avgAbund_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          ## Filtered zip/time data
-          geom_line(color = "seagreen4", linewidth = 0.8) +
-          geom_point(color = "seagreen3", size = 3, alpha = 0.8,
-                     aes(text = paste0("Week:  ", date, "<br>",
-                                      "Average abundance:  ",round(abund_woy_avg,2))
-                     )) +
-          labs(y = "Average weekly abundance",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%d %b %y",
-                       breaks = unique(abund_data()$date)) +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10))
-       
-        ggplotly(p, tooltip = c("text")) %>% 
-           config(displaylogo = FALSE,
-                  modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                             "hoverClosestCartesian",
-                                             "hoverCompareCartesian"))
-      })
-      ## If plotting between 2 months to a year
-    } else if (difftime(input$trap_dateRange[2],
-                        input$trap_dateRange[1]) <= 365) {
-      renderPlotly({
-       p <- ggplot(data = abund_data(), aes(x = date, y = abund_woy_avg)) +
-          ## Kern avg (in time period):
-          geom_hline(yintercept = avgAbund_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          ## Zip avg (all time):
-          geom_hline(yintercept = avgAbund_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          ## Filtered zip/time data
-          geom_line(color = "seagreen4", linewidth = 0.8) +
-          geom_point(color = "seagreen3", size = 3, alpha = 0.8,
-                     aes(text = paste0("Week:  ", date, "<br>",
-                                      "Average abundance:  ",round(abund_woy_avg,2))
-                     )) +
-          labs(y = "Average weekly abundance",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b %y",
-                       date_breaks = "1 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10))
-       
-       ggplotly(p, tooltip = c("text")) %>% 
-         config(displaylogo = FALSE,
-                modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                           "hoverClosestCartesian",
-                                           "hoverCompareCartesian"))
-      })
-      ## If plotting between a year and two years
-    } else if (difftime(input$trap_dateRange[2],
-                        input$trap_dateRange[1]) <= 730) {
-      renderPlotly({
-        p <- ggplot(data = abund_data(), aes(x = date, y = abund_woy_avg)) +
-          ## Kern avg (in time period):
-          geom_hline(yintercept = avgAbund_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          ## Zip avg (all time):
-          geom_hline(yintercept = avgAbund_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          ## Filtered zip/time data
-          geom_line(color = "seagreen4", linewidth = 0.8) +
-          geom_point(color = "seagreen3", size = 2, alpha = 0.8,
-                     aes(text = paste0("Week:  ", date, "<br>",
-                                      "Average abundance:  ",round(abund_woy_avg,2))
-                     )) +
-          labs(y = "Average weekly abundance",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b\n%y",
-                       date_breaks = "2 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10))
-        
-        ggplotly(p, tooltip = c("text")) %>%  
-          config(displaylogo = FALSE,
-                 modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                            "hoverClosestCartesian",
-                                            "hoverCompareCartesian"))
-      })
-      ## If plot time is greater than two years
-    }  else {
-      renderPlotly({
-        p <- ggplot(data = abund_data(), 
-                    aes(x = date, y = abund_woy_avg)) +
-          ## Kern avg (in time period):
-          geom_hline(yintercept = avgAbund_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          ## Zip avg (all time):
-          geom_hline(yintercept = avgAbund_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          ## Filtered zip/time data
-          geom_line(color = "seagreen4", linewidth = 0.8) +
-          geom_point(color = "seagreen3", size = 1.5, alpha = 0.8,
-                     aes(text = paste0("Week:  ", date, "<br>",
-                                  "Average abundance:  ",round(abund_woy_avg,2))
-                         )) +
-          labs(y = "Average weekly abundance",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b\n%y",
-                       date_breaks = "3 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10))
-        
-        ggplotly(p, tooltip = c("text")) %>% 
-          config(displaylogo = FALSE,
-                 modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                            "hoverClosestCartesian",
-                                            "hoverCompareCartesian"))
-      })
-    }
-  })
-
-  ## Test combo
+  ### MIR Plots ---------------------------
+  # ## Combine WNV and SLEV into one reactive plot.
+  # ## ggplot format wrapped in plotly
   output$mir_plots <- renderPlotly({
+    ## WNV plot
     wnv <- ggplotly(
-      ggplot(data = wnv_data(), aes(x = date, y = mir_avg)) +
-      ## Filtered to zip/time
-      geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
-      ## Kern avg (in time period):
-      geom_hline(yintercept = avgWnv_kern(),
-                 color = "black", linetype = "dashed", linewidth = 0.8) +
-      ## Zip avg (all time):
-      geom_hline(yintercept = avgWnv_zip(),
-                 color = "purple", linetype = "dashed", linewidth = 0.8) +
-      labs(y = "Weekly WNV MIR",
-           x = element_blank()) +
-      scale_x_date(date_labels = "%b %y",
-                   date_breaks = "1 month")+
-      # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
-      theme_classic() +
-      theme(
-        axis.title.y = element_text(vjust = 2, size = 14),
-        axis.text = element_text(size = 10)) 
-    )
-    
-    slev <- ggplotly(
-      ggplot(data = slev_data(), aes(x = date, y = mir_avg)) +
+      ggplot(data = wnv_data(),
+             aes(
+               x = date,
+               y = mir_avg,
+               ## Text to appear in tooltip
+               text = paste0("Week: ", date,
+                             "<br>",
+                             "Average MIR: ",
+                             round(mir_avg, 3))
+             )) +
         ## Filtered to zip/time
-        geom_col(fill = "#fff9ae", color = "#a98600", alpha = 0.7) +
+        geom_col(
+          fill = "sienna2",
+          color = "sienna4",
+          alpha = 0.7
+        ) +
         ## Kern avg (in time period):
-        geom_hline(yintercept = avgSlev_kern(),
-                   color = "black", linetype = "dashed", linewidth = 0.8) +
+        geom_hline(
+          yintercept = avgWnv_kern(),
+          color = "black",
+          linetype = "dashed",
+          linewidth = 0.5
+        ) +
         ## Zip avg (all time):
-        geom_hline(yintercept = avgSlev_zip(),
-                   color = "purple", linetype = "dashed", linewidth = 0.8) +
-        labs(y = "Weekly SLEV MIR",
+        geom_hline(
+          yintercept = avgWnv_zip(),
+          color = "purple",
+          linetype = "dashed",
+          linewidth = 0.5
+        ) +
+        # Change X axis labels and breaks depending on
+        # length of time period
+        (if (difftime(input$trap_dateRange[2],
+                      input$trap_dateRange[1]) <= 62) {
+          scale_x_date(date_labels = "%d %b %y",
+                       breaks = unique(wnv_data()$date))
+        } else if (difftime(input$trap_dateRange[2],
+                            input$trap_dateRange[1]) <= 365) {
+          scale_x_date(date_labels = "%b %y",
+                       date_breaks = "1 month")
+        } else if (difftime(input$trap_dateRange[2],
+                            input$trap_dateRange[1]) <= 730) {
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "2 month")
+        } else if (difftime(input$trap_dateRange[2],
+                            input$trap_dateRange[1]) <= 1461) {
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "3 month")
+        } else {
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "6 month")
+        }) +
+        ## Labels and text options
+        labs(y = "Weekly WNV MIR",
              x = element_blank()) +
-        scale_x_date(date_labels = "%b %y",
-                     date_breaks = "1 month")+
-        # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
         theme_classic() +
         theme(
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.text = element_text(size = 10)) 
-    )
+          axis.title.y = element_text(vjust = 2, size = 12),
+          axis.text = element_text(size = 10)
+        ),
+      ## Define hover text
+      tooltip = c("text")
+    ) %>% 
+      ## Customize plotly menu
+      config(
+        displaylogo = FALSE,
+        modeBarButtonsToRemove = c(
+          "select2d",
+          "lasso2d",
+          "resetScale2d",
+          "hoverClosestCartesian",
+          "hoverCompareCartesian"
+        )
+      )
     
+    ## SLEV plot
+    slev <- ggplotly(
+      ggplot(data = slev_data(),
+             aes(
+               x = date,
+               y = mir_avg,
+               ## Text to appear in tooltip
+               text = paste0("Week:  ", date,
+                             "<br>",
+                             "Average MIR:  ",
+                             round(mir_avg, 3))
+             )) +
+        ## Filtered to zip/time
+        geom_col(fill = "#fff9ae",
+                 color = "#a98600",
+                 alpha = 0.7) +
+        ## Kern avg (in time period):
+        geom_hline(
+          yintercept = avgSlev_kern(),
+          color = "black",
+          linetype = "dashed",
+          linewidth = 0.5
+        ) +
+        ## Zip avg (all time):
+        geom_hline(
+          yintercept = avgSlev_zip(),
+          color = "purple",
+          linetype = "dashed",
+          linewidth = 0.5
+        ) +
+        ## Change X axis labels and breaks depending on
+        ## length of time period
+        (if (difftime(input$trap_dateRange[2],
+                      input$trap_dateRange[1]) <= 62) {
+          scale_x_date(date_labels = "%d %b %y",
+                       breaks = unique(slev_data()$date))
+        } else if (difftime(input$trap_dateRange[2],
+                            input$trap_dateRange[1]) <= 365) {
+          scale_x_date(date_labels = "%b %y",
+                       date_breaks = "1 month")
+        } else if (difftime(input$trap_dateRange[2],
+                            input$trap_dateRange[1]) <= 730) {
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "2 month")
+        } else if (difftime(input$trap_dateRange[2],
+                            input$trap_dateRange[1]) <= 1461) {
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "3 month")
+        } else {
+          scale_x_date(date_labels = "%b\n%y",
+                       date_breaks = "6 month")
+        }) +
+        ## Labels/text options
+        labs(y = "Weekly SLEV MIR",
+             x = element_blank()) +
+        theme_classic() +
+        theme(axis.title.y = element_text(vjust = 2, size = 12),
+              axis.text = element_text(size = 10)),
+      ## Define hover text
+      tooltip = c("text")
+    ) %>% 
+      ## Customize plotly menu
+      config(
+        displaylogo = FALSE,
+        modeBarButtonsToRemove = c(
+          "select2d",
+          "lasso2d",
+          "resetScale2d",
+          "hoverClosestCartesian",
+          "hoverCompareCartesian"
+        )
+      )
+    
+    ## Combine MIR plots
     subplot(wnv, slev, nrows = 2, margin = 0.05, titleY = TRUE)
+    
+  }) ##END MIR plots
+  
+  
+  
+  ## CAPTIONS ----------------------------------------------------
+  
+  ## Map caption
+  output$trapMap_caption <- renderText({
+    paste("Interactive map of zip codes within the Central Valley and Kern County, California. First, select a zip code on the map or manually enter it into the side menu. Then, you may visualize data by month or year, or select a custom date range. The selected zip code is outlined in yellow. Borders for Kern County and the Central Valley can be toggled using the map options in the upper right corner.")
   })
   
-  
-  
-  ## WNV plot
-  wnv_plot <- reactive({
-    ## Under two months
-    if (difftime(input$trap_dateRange[2],
-                 input$trap_dateRange[1]) <= 62) {
-      ggplotly(
-        ggplot(data = wnv_data(), 
-               aes(x = date, y = mir_avg,
-                   text = paste0("Week: ", date, "<br>",
-                                "Average MIR: ",
-                                round(mir_avg, 3)))) +
-          ## Filtered to zip/time
-          geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
-          ## Kern avg (in time period):
-          geom_hline(yintercept = avgWnv_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          ## Zip avg (all time):
-          geom_hline(yintercept = avgWnv_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          labs(y = "Weekly WNV MIR",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%d %b %y")+
-          # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10)),
-        tooltip = c("text")
-      ) %>% 
-        config(displaylogo = FALSE,
-               modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                          "hoverClosestCartesian",
-                                          "hoverCompareCartesian"))
-    ## Between 2mo and 1yr
-    } else if (difftime(input$trap_dateRange[2],
-                        input$trap_dateRange[1]) <= 365) {
-      ggplotly(
-        ggplot(data = wnv_data(), 
-               aes(x = date, y = mir_avg,
-                   text = paste0("Week: ", date, "<br>",
-                                "Average MIR: ",
-                                round(mir_avg, 3)))) +
-          geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
-          geom_hline(yintercept = avgWnv_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          geom_hline(yintercept = avgWnv_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          labs(y = "Weekly WNV MIR",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b %y",
-                       date_breaks = "1 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10)),
-        tooltip = c("text")
-      ) %>% 
-        config(displaylogo = FALSE,
-               modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                          "hoverClosestCartesian",
-                                          "hoverCompareCartesian"))
-    ## Between 1yr and 2yrs
-    } else if (difftime(input$trap_dateRange[2],
-                        input$trap_dateRange[1]) <= 730) {
-      ggplotly(
-        ggplot(data = wnv_data(), 
-               aes(x = date, y = mir_avg,
-                   text = paste0("Week: ", date, "<br>",
-                                "Average MIR: ",
-                                round(mir_avg, 3)))) +
-          geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
-          geom_hline(yintercept = avgWnv_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          geom_hline(yintercept = avgWnv_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          labs(y = "Weekly WNV MIR",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b\n%y",
-                       date_breaks = "2 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10)),
-        tooltip = c("text")
-      ) %>% 
-        config(displaylogo = FALSE,
-               modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                          "hoverClosestCartesian",
-                                          "hoverCompareCartesian"))
-    ## Plot time over two years
-    } else {
-      ggplotly(
-        ggplot(data = wnv_data(), 
-               aes(x = date, y = mir_avg,
-                   text = paste0("Week:  ", date, "<br>",
-                                "Average MIR:  ",
-                                round(mir_avg, 3)))) +
-          geom_col(fill = "sienna2", color = "sienna4", alpha = 0.7) +
-          geom_hline(yintercept = avgWnv_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          geom_hline(yintercept = avgWnv_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          labs(y = "Weekly WNV MIR",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b\n%y",
-                       date_breaks = "3 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10)),
-        tooltip = c("text")
-      ) %>% 
-        config(displaylogo = FALSE,
-               modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                          "hoverClosestCartesian",
-                                          "hoverCompareCartesian"))
-    }
-  })
-  
-  
-  ## SLEV plot
-  slev_plot <- reactive({
-    if (difftime(input$trap_dateRange[2],
-                 input$trap_dateRange[1]) <= 62) {
-      ## Under 2mos
-      ggplotly(
-        ggplot(data = slev_data(), 
-               aes(x = date, y = mir_avg,
-                   text = paste0("Week:  ", date, "<br>",
-                                "Average MIR:  ",
-                                round(mir_avg, 3)))) +
-          ## Filtered to zip/time
-          geom_col(fill = "#fff9ae", color = "#a98600", alpha = 0.7) +
-          ## Kern avg (in time period):
-          geom_hline(yintercept = avgSlev_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          ## Zip avg (all time):
-          geom_hline(yintercept = avgSlev_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          labs(y = "Weekly SLEV MIR",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%d %b %y")+
-          # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10)),
-        tooltip = c("text")
-      ) %>% 
-        config(displaylogo = FALSE,
-               modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                          "hoverClosestCartesian",
-                                          "hoverCompareCartesian"))
-    ## Between 2mo and 1yr
-    } else if (difftime(input$trap_dateRange[2],
-                        input$trap_dateRange[1]) <= 365) {
-      ggplotly(
-        ggplot(data = slev_data(), 
-               aes(x = date, y = mir_avg,
-                   text = paste0("Week:  ", date, "<br>",
-                                "Average MIR:  ",
-                                round(mir_avg, 3)))) +
-          geom_col(fill = "#fff9ae", color = "#a98600", alpha = 0.7) +
-          geom_hline(yintercept = avgSlev_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          geom_hline(yintercept = avgSlev_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          labs(y = "Weekly SLEV MIR",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b %y",
-                       date_breaks = "1 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10)), 
-        tooltip = c("text")
-      ) %>% 
-        config(displaylogo = FALSE,
-               modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                          "hoverClosestCartesian",
-                                          "hoverCompareCartesian"))
-    ## Between 1yr and 2yrs
-    } else if (difftime(input$trap_dateRange[2],
-                        input$trap_dateRange[1]) <= 730) {
-      ggplotly(
-        ggplot(data = slev_data(), 
-               aes(x = date, y = mir_avg,
-                   text = paste0("Week:  ", date, "<br>",
-                                "Average MIR:  ",
-                                round(mir_avg, 3)))) +
-          geom_col(fill = "#fff9ae", color = "#a98600", alpha = 0.7) +
-          geom_hline(yintercept = avgSlev_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          geom_hline(yintercept = avgSlev_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          labs(y = "Weekly SLEV MIR",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b\n%y",
-                       date_breaks = "2 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 12),
-            axis.text = element_text(size = 10)),
-        tooltip = c("text")
-      ) %>% 
-        config(displaylogo = FALSE,
-               modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                          "hoverClosestCartesian",
-                                          "hoverCompareCartesian"))
-    ## Over 2yrs
-    } else {
-      ggplotly(
-        ggplot(data = slev_data(), 
-               aes(x = date, y = mir_avg,
-                   text = paste0("Week:  ", date, "<br>",
-                                "Average MIR:  ",
-                                round(mir_avg, 3)))) +
-          geom_col(fill = "#fff9ae", color = "#a98600", alpha = 0.7) +
-          geom_hline(yintercept = avgSlev_kern(),
-                     color = "black", linetype = "dashed", linewidth = 0.5) +
-          geom_hline(yintercept = avgSlev_zip(),
-                     color = "purple", linetype = "dashed", linewidth = 0.5) +
-          labs(y = "Weekly SLEV MIR",
-               x = element_blank()) +
-          scale_x_date(date_labels = "%b\n%y",
-                       date_breaks = "3 month") +
-          theme_classic() +
-          theme(
-            axis.title.y = element_text(vjust = 2, size = 10),
-            axis.text = element_text(size = 10)),
-        tooltip = c("text")
-      ) %>% 
-        config(displaylogo = FALSE,
-               modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                          "hoverClosestCartesian",
-                                          "hoverCompareCartesian"))
-    }
-  })
-  
-  output$mir_plots <- renderUI({
-    ## If neither have WNV nor SLEV have data
-    if (all(is.na(wnv_data()$mir_avg)) & all(is.na(slev_data()$mir_avg))) {
-      strong("Neither WNV nor SLEV infection data are available for this location and time.")
-    ## If only WNV is NA
-    } else if (all(is.na(wnv_data()$mir_avg))) {
-      strong("No WNV infection data are available for this location and time.")
-      renderPlotly({
-        slev_plot()
-      })
-    ## If only SLEV is NA
-    } else if (all(is.na(slev_data()$mir_avg))) {
-      strong("No SLEV infection data are available for this location and time.")
-      renderPlotly({
-        wnv_plot()
-      })
-    ## If data for both
-    } else {
-      renderPlotly({
-        wnv <- wnv_plot()
-        slev <- slev_plot()
-        subplot(wnv, slev, nrows = 2, margin = 0.06, titleY = TRUE)
-      })
-    }
-  })
-
-  
-  
-  ## Reactive captions for map
+  ## Abundance plot caption
   output$abundPlot_caption <- renderText({
-    ## If invalid zip, don't show text
-    if(!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      paste("Average mosquito abundance within Kern County. The green line displays average weekly abundance within zip code ", zipcodeTrap_d(), " between ", input$trap_dateRange[1], " and ", input$trap_dateRange[2], ". The dashed black line represents the average mosquito abundance within this time period across all Kern zip codes, while the dashed purple line shows average abundance in zip code ", zipcodeTrap_d(), " from 2010 to present.")
-    }
+    paste0("The green line displays average weekly abundance within zip code ", zipcodeTrap_d(), " between the selected dates. The dashed black line represents the average mosquito abundance within this time period across all Kern zip codes (", round(avgAbund_kern(),2), ") while the dashed purple line shows average abundance in zip code ", zipcodeTrap_d(), " from 2010 to present (", round(avgAbund_zip(),2), ").")
   })
   
-  output$wnvPlot_caption <- renderText({
-    if(!(zipcodeTrap_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      paste("<b>","Fig. 3: Average minimum infection rates (MIR) for West Nile (top) and St. Louis Encephalitis (bottom) viruses within Kern County.","</b>", "The orange and yellow bars displays average weekly MIR for WNV and SLEV, respectivley, within zip code ", zipcodeTrap_d(), " between ", input$trap_dateRange[1], " and ", input$trap_dateRange[2], ". The dashed black line represents the average MIR within this time period across all Kern zip codes, while the dashed purple line shows average MIR in zip code ", zipcodeTrap_d(), " from 2010 to present.")
-    }
+  ## MIR plot caption
+  output$mirPlot_caption <- renderText({
+    paste0("The orange and yellow bars display average weekly MIR for WNV and SLEV, respectivley, within zip code ", zipcodeTrap_d(), " between the selected dates. The dashed black lines represent the average MIR across all Kern within this time period (WNV: ", round(avgWnv_kern(),2), "; SLEV: ", round(avgSlev_kern(),2), "). The dashed purple lines show the average MIR in zip code ", zipcodeTrap_d(), " from 2010 to present (WNV: ", round(avgWnv_zip(),2), "; SLEV: (", round(avgSlev_zip(),2), ").")
   })
   
   
-
-  # TAB 2 - Interactive Map ##################################################
   
-  ### PANEL ELEMENTS -----------------------------------------------------------
+  # TAB 2: Interactive Map ##################################################
   
-  #### Zip code ---------------------
+  ###PANEL ELEMENTS -----------------------------------
+  
+  #### Zip code -----------------
   ## React to user input and slightly delay response
   zipcode <- reactive(input$zip_box)
   zipcode_d <- debounce(zipcode, millis = 1500)
   
   ## Validation text below zip box
   iv <- InputValidator$new()
-      ### Must be 5 numbers
-      iv$add_rule("zip_box", function(length) {
-        length = nchar(zipcode_d())
-        if (length !=5 & length != 0) {
-          "Only 5-character entries are permitted."
-        }
-      })
-      ### Must be zip in Kern
-      iv$add_rule("zip_box", function(zipcode_d) {
-        if (!(zipcode_d() %in% zips_sf$zipcode) & nchar(zipcode_d()) != 0) {
-          "Please enter a valid zip code."
-        } 
-      })
+  ### Must be 5 numbers
+  iv$add_rule("zip_box", function(length) {
+    length = nchar(zipcode_d())
+    if (length !=5 & length != 0) {
+      "Only 5-character entries are permitted."
+    }
+  })
+  ### Must be zip in Kern
+  iv$add_rule("zip_box", function(zipcode_d) {
+    if (!(zipcode_d() %in% zips_sf$zipcode) & nchar(zipcode_d()) != 0) {
+      "Please enter a valid zip code."
+    } 
+  })
   iv$enable()
+  
+  #### Date range -----------------
+  ## Validation text for risk date range
+  ivTemp <- InputValidator$new()
+  ### Proper end date
+  ivTemp$add_rule("risk_dateRange", function(start, end) {
+    start = input$risk_dateRange[1]
+    end = input$risk_dateRange[2]
+    if (end < start) {
+      "End date is earlier than start date."
+    }
+  })
+  ### Dates w/in data range
+  ivTemp$add_rule("risk_dateRange", 
+                  ~ if(input$risk_dateRange[1] < "2010-04-01") 
+                    "Start date must be after 2010-04-01.")
+  ivTemp$add_rule("risk_dateRange", 
+                  ~ if(input$risk_dateRange[2] > "2023-11-30") 
+                    "End date must be before 2023-11-30.")
+  
+  ivTemp$enable()
+  
+  ## Line
+  output$date_line <- renderUI({
+    ## If invalid zip input, don't show text
+    if (!(zipcode_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else {
+      hr(style = 'border-top: 1.5px solid #2d3e50')
+    }
+  })
   
   
   #### R0 ---------------------------
-  # ## Return mean transmission risk based on zip input
+  # ## Return mean R0 based on zip input
   # r0_zip <- reactive({
   #   r0_filtered <- r0_zip_df %>% 
   #     filter(zipcode == zipcode_d())
@@ -984,59 +852,28 @@ function(input, output, session) {
   #   }
   # })
   
-  
-  #### Date range --------------------
-  # ## Date header
-  # output$dates_header <- renderText({
-  #   ## If invalid zip, don't show text
+  ## test accordion
+  # output$riskAccordion <- renderUI({
   #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
   #     return(NULL)
   #   } else {
-  #     paste("<h3>", "Date range:", "</h3>")
+  #   accordion(
+  #     accordion_panel(
+  #       "Temperature:",
+  #       htmlOutput("tempDays_text"),
+  #       plotOutput("temp_plot", height = 180)
+  #     ),
+  #     accordion_panel(
+  #       "Standing Water:",
+  #       plotOutput("water_plot", height = 170)
+  #     )
+  #   )
   #   }
-  # })
-  # 
-  # ## Risk date range
-  # output$risk_dateRange <- renderUI({
-  #   if(zipcode_d()=="") {
-  #     return(NULL)
-  #   } else {
-  #     dateRangeInput("risk_dateRange",
-  #                    label = NULL,
-  #                    start = "2023-01-01",
-  #                    end = "2023-07-31")
-  #   }
+  #   
   # })
   
-  ## Validation text for risk date range
-  ivTemp <- InputValidator$new()
-  ### Proper end date
-  ivTemp$add_rule("risk_dateRange", function(start, end) {
-    start = input$risk_dateRange[1]
-    end = input$risk_dateRange[2]
-    if (end < start) {
-      "End date is earlier than start date."
-    }
-  })
-  ### Dates w/in data range
-  ivTemp$add_rule("risk_dateRange", 
-                  ~ if(input$risk_dateRange[1] < "2010-04-01") 
-                    "Start date must be after 2010-04-01.")
-  ivTemp$add_rule("risk_dateRange", 
-                  ~ if(input$risk_dateRange[2] > "2023-11-30") 
-                    "End date must be before 2023-11-30.")
   
-  ivTemp$enable()
   
-  ## Line
-  output$date_line <- renderUI({
-    ## If invalid zip input, don't show text
-    if (!(zipcode_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      hr(style = 'border-top: 1.5px solid #2d3e50')
-    }
-  })
   
   #### Temperature -------------------
   ## Temp header
@@ -1049,18 +886,6 @@ function(input, output, session) {
     }
   })
   
-  # ## Temp date range
-  # output$temp_dateRange <- renderUI({
-  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
-  #     return(NULL)
-  #   } else {
-  #     dateRangeInput("temp_dateRange",
-  #                    label = NULL,
-  #                    start = "2023-01-01",
-  #                    end = "2023-07-31")
-  #   }
-  # })
-  
   ## Filter temp data based on zip input
   temp_zip <- reactive({
     temp_filtered <- temp_zip_df %>% 
@@ -1069,115 +894,74 @@ function(input, output, session) {
     
     return(temp_filtered)
   })   
-  
-  # ## Validation text for temp date range
-  # ivTemp <- InputValidator$new()
-  #     ### Proper end date
-  #     ivTemp$add_rule("temp_dateRange", function(start, end) {
-  #       start = input$risk_dateRange[1]
-  #       end = input$risk_dateRange[2]
-  #       if (end < start) {
-  #         "End date is earlier than start date."
-  #       }
-  #     })
-  #     ### Dates w/in data range
-  #     ivTemp$add_rule("temp_dateRange", 
-  #                     ~ if(input$temp_dateRange[1] < "2018-01-01") 
-  #                       "Start date must be after 2018-01-01.")
-  #     ivTemp$add_rule("temp_dateRange", 
-  #                     ~ if(input$temp_dateRange[2] > "2023-07-31") 
-  #                       "End date must be before 2023-07-31.")
-  # 
-  # ivTemp$enable()
-  
   ## Number of days at optimal temp
-  tempOptDays_int <- reactive({
+  optDays_int <- reactive({
     days = sum(temp_zip()$cx_opt == "optimal")
-    
     return(days)
   })
   ## Percent of days at optimal temp
-  tempOptDays_per <- reactive({
-    percent = round((tempOptDays_int()/(nrow(temp_zip())))*100, 2)
-    
+  optDays_per <- reactive({
+    percent = round((optDays_int()/(nrow(temp_zip())))*100, 2)
     return(percent)
   })
-  
-  ## Number of days in temp range
-  tempRangeDays_int <- reactive({
+  ## Number off days in Culex temp range
+  rangeDays_int <- reactive({
     days = sum(temp_zip()$cx_opt == "in range")
-    
     return(days)
   })
-  ## Percent of days in temp range
-  tempRangeDays_per <- reactive({
-    percent = round(((tempRangeDays_int()+tempOptDays_int())/(nrow(temp_zip())))*100, 2)
-    
+  ## Percent of days in Culex temp range
+  rangeDays_per <- reactive({
+    percent = round(((rangeDays_int()+optDays_int())/(nrow(temp_zip())))*100, 2)
     return(percent)
   })
   
+  ## Reactive temp text
   output$tempDays_text <- renderText({
     ## If invalid zip, don't show text
     if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
-      paste0("In this time period, ", "<b>",tempOptDays_int(), " days ","</b>",  "(", tempOptDays_per(), "%)",  " fell within the optimal temperature range (red) and ", tempRangeDays_int(), " days (", tempRangeDays_per(),"%) fell within the thermal limits (orange) for WNV transmission by ", "<i>","Culex","</i>", " mosquitoes.")
+      paste0("In this time period, ", "<b>",optDays_int(), " days ","</b>",  "(", optDays_per(), "%)",  " fell within the optimal temperature range (red) and ", rangeDays_int(), " days (", rangeDays_per(),"%) fell within the thermal limits (orange) for WNV transmission by ", "<i>","Culex","</i>", " mosquitoes.")
     }
   })
   
   ## Daily temp plot
   output$temp_plot <- renderPlot({
+    ## Doesn't appear until zip selected
     if (!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
-    } else if (difftime(input$risk_dateRange[2],
-                        input$risk_dateRange[1]) <= 31) {
-      ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
-        geom_rect(xmin = -Inf, xmax = Inf, ymax = 89.42, ymin = 78.6,
-                  alpha = 0.05, fill = "gray89")+
-        geom_rect(xmin = -Inf, xmax = Inf, ymax = 78.6, ymin = 73.2,
-                  alpha = 0.05, fill = "gray81")+
-        geom_rect(xmin = -Inf, xmax = Inf, ymax = 73.2, ymin = 53.78,
-                  alpha = 0.05, fill = "gray89")+
-        geom_point(size = 3, 
-                   alpha = 0.7,
-                   aes(color = cx_opt)) +
-        scale_color_manual(name = "",
-                           values = c("firebrick2","goldenrod3", "dodgerblue"))+
-        geom_line(linewidth = 0.7) +
-        labs(y = "Mean daily temp (F)",
-             x = element_blank()) +
-        scale_x_date(date_labels = "%d\n%b") +
-        geom_hline(yintercept = 89.42, linetype = "dashed", color = "gray50")+
-        geom_hline(yintercept = 78.6, linetype = "dashed", color = "gray50")+
-        geom_hline(yintercept = 73.2, linetype = "dashed", color = "gray50")+
-        geom_hline(yintercept = 53.78, linetype = "dashed", color = "gray50")+
-        theme_classic() +
-        theme(
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.title.x = element_text(vjust = -1, size = 14),
-          axis.text = element_text(size = 13),
-          legend.position = "none")
     } else {
       ggplot(data = temp_zip(), aes(x = date, y = tmean_f)) +
+        ## boxes to rep optimal Culex temp zones
         geom_rect(xmin = -Inf, xmax = Inf, ymax = 89.42, ymin = 78.6,
                   alpha = 0.05, fill = "gray89")+
         geom_rect(xmin = -Inf, xmax = Inf, ymax = 78.6, ymin = 73.2,
                   alpha = 0.05, fill = "gray81")+
         geom_rect(xmin = -Inf, xmax = Inf, ymax = 73.2, ymin = 53.78,
                   alpha = 0.05, fill = "gray89")+
-        geom_point(size = 3, 
-                   alpha = 0.7,
-                   aes(color = cx_opt)) +
-        scale_color_manual(name = "",
-                           values = c("firebrick2","goldenrod3", "dodgerblue"))+
-        geom_line(linewidth = 0.7) +
-        labs(y = "Mean daily temp (F)",
-             x = element_blank()) +
-        scale_x_date(date_labels = "%b %y") +
+        ## lines separating optimal zones
         geom_hline(yintercept = 89.42, linetype = "dashed", color = "gray50")+
         geom_hline(yintercept = 78.6, linetype = "dashed", color = "gray50")+
         geom_hline(yintercept = 73.2, linetype = "dashed", color = "gray50")+
         geom_hline(yintercept = 53.78, linetype = "dashed", color = "gray50")+
+        ## filtered temp data
+        geom_point(size = 3, 
+                   alpha = 0.7,
+                   aes(color = cx_opt)) +
+        ## set colors based on optimal temp
+        scale_color_manual(name = "",
+                           values = c("firebrick2","goldenrod3", "dodgerblue"))+
+        geom_line(linewidth = 0.7) +
+        ## change labels/breaks based on time range
+        (if (difftime(input$risk_dateRange[2],
+                      input$risk_dateRange[1]) <= 31) {
+          scale_x_date(date_labels = "%d\n%b")
+        } else { 
+          scale_x_date(date_labels = "%b %y")
+        }) +
+        ## labels/text options
+        labs(y = "Mean daily temp (F)",
+             x = element_blank()) +
         theme_classic() +
         theme(
           axis.title.y = element_text(vjust = 2, size = 14),
@@ -1208,117 +992,107 @@ function(input, output, session) {
     }
   })
   
-  
-  # ## Water date range
-  # output$water_dateRange <- renderUI({
-  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
-  #     return(NULL)
-  #   } else {
-  #     dateRangeInput("water_dateRange",
-  #                    label = NULL,
-  #                    start = "2023-01-01",
-  #                    end = "2023-07-31")
-  #   }
-  # })
-  
   ## Filter water data based on zip input
   water_zip <- reactive({
     water_filtered <- water_zip_df %>% 
       filter(zipcode == zipcode_d(),
              date >= input$risk_dateRange[1] & date <= input$risk_dateRange[2]) 
-    
     return(water_filtered)
   })   
   
+  
   ## Standing water time series
   output$water_plot <- renderPlot({
-   if (!(zipcode_d() %in% zips_sf$zipcode)) {
-     return(NULL)
-   } else if (length(water_zip()$acres_int)==0) {
-     strong("No water data available for this time.")
-   } else {
-    ggplot(data = water_zip(), aes(x = date, y = acres_int)) +
-      geom_point(color = "dodgerblue3", size = 4, alpha = 0.6) +
-      geom_line(linewidth = 0.6, color = "dodgerblue4") +
-      labs(y = "Surface water (acres)",
-           x = element_blank()) +
-      ## customize axis with cont 'date' class data
-      # scale_x_date(limits = as.Date(c('2023-05-07', '2023-06-25')),
-      #              date_breaks = "2 week",
-      #              date_labels = "%b %d") +
-      theme_classic() +
-      theme(
-        # axis.title.x = element_text(face = "bold", vjust = -1),
-        axis.title.y = element_text(vjust = 2, size = 14),
-        axis.text = element_text(size = 13)
-      )
-   }
+    if (!(zipcode_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else if (length(water_zip()$acres_int)==0) {
+      strong("No water data available for this time.")
+    } else {
+      ggplot(data = water_zip(), aes(x = date, y = acres_int)) +
+        geom_point(color = "dodgerblue3",
+                   size = 4,
+                   alpha = 0.6) +
+        geom_line(linewidth = 0.6, color = "dodgerblue4") +
+        ## change labels/breaks based on time range
+        (if (difftime(input$risk_dateRange[2],
+                      input$risk_dateRange[1]) <= 31) {
+          scale_x_date(date_labels = "%d\n%b")
+        } else {
+          scale_x_date(date_labels = "%b %y")
+        }) +
+        labs(y = "Surface water (acres)",
+             x = element_blank()) +
+        theme_classic() +
+        theme(
+          axis.title.y = element_text(vjust = 2, size = 14),
+          axis.text = element_text(size = 13)
+        )
+    }
   })
   
-
-
   
   
-  
-  ### LEAFLET MAP --------------------------------------------------------------
-  output$map <- renderLeaflet({
+  ### RISK MAP ---------------------------------------
+  output$riskMap <- renderLeaflet({
     leaflet() %>% 
-      ## Add background maps
+      ## Add background maps (OSM default)
       addTiles(group = "OpenStreetMaps") %>% 
       addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
       
-      #### Add rasters -------------------------------
+      #### Add rasters
       ## Transmission efficiency
-      # addRasterImage(wnv_trans, colors = pal, 
+      # addRasterImage(r0_r, colors = r0_pal, 
       #                project = FALSE, group = "R0") %>%
-      # ## Standing water
-      # addRasterImage(water, colors = 'dodgerblue4',
-      #                project = FALSE, group = "Standing Water") %>%
       
-      #### Add vectors ---------------------------------
+      
+      #### Add vectors 
       ## Zip codes
       addPolygons(data = zips_sf, color = "#343434",
                   weight = 2, fillOpacity = 0.1,
+                  ## hover text
                   label = paste0("Zip code: ", zips_sf$zipcode),
                   labelOptions = labelOptions(textsize = "11px"),
+                  ## hover highlight
                   highlight = highlightOptions(weight = 5,
                                                color = "white",
                                                bringToFront = TRUE),
                   group = "Zip codes",
                   layerId = ~zipcode) %>%  
-    
+      
       ## Kern county
       addPolylines(data = kern_sf,
                    color = 'black', weight = 4, fillOpacity = 0,
                    group = "Kern county") %>% 
-    
+      
       ## Central valley
       addPolylines(data = valley_sf,
                    color = 'blue', weight = 2.5, fillOpacity = 0,
                    group = "Central Valley") %>%
       
-      #### Create map groups -----------------------------
+      #### Create map groups
       addLayersControl(
         baseGroups = c("OpenStreetMaps", "World Imagery"),
-        overlayGroups = c("R0", "Standing Water", "Zip codes", "Kern county", "Central Valley"),
+        ## Add R0 layer here later
+        overlayGroups = c("Zip codes", "Kern county", "Central Valley"),
         options = layersControlOptions(collapsed = TRUE),
         position = "topleft") %>% 
       
       ## Don't show all layers by default
-      hideGroup(c("R0", "Standing Water", "Central Valley")) %>% 
+      hideGroup(c("Central Valley")) %>% 
       
-      #### Add map inset ---------------------------------
+      #### Add map inset
       addMiniMap(
         tiles = providers$Esri.WorldStreetMap,
         zoomLevelOffset = -5,
         position = 'bottomleft',
         toggleDisplay = TRUE) %>% 
       
-      #### Add legend ------------------------------------
-      # addLegend(pal = pal, values = values(wnv_trans),
-      #           position = "topleft",
-      #           title = "WNV Transmission </br> Efficiency") %>% 
       setView(-119.2, 35.38, zoom = 10)
+    
+    #### Add legend 
+    # addLegend(pal = r0_pal, values = values(r0_r),
+    #           position = "topleft",
+    #           title = "WNV Transmission </br> Efficiency") 
   }) ## END LEAFLET
   
   
@@ -1326,28 +1100,27 @@ function(input, output, session) {
   
   ## Click on zip code polygon to input value in text box
   observe({
-    event <- input$map_shape_click
+    event <- input$riskMap_shape_click
     if(is.null(event$id))
       return()
-    
     ## change text box value
     updateTextInput(session, 
                     inputId = "zip_box", 
                     value = event$id)
   })
-
+  
   ## Zoom and highlight zip code
   observe({
-
     ## establish zip code boundaries
     geom <- zips_sf %>%
       dplyr::filter(zipcode == input$zip_box)
     bounds <- geom %>%
       st_bbox() %>%
       as.character()
-
+    
     ## Update map
-    leafletProxy("map") %>%
+    leafletProxy("riskMap") %>%
+      ## remove previously selected zip
       clearGroup("highlighted_polygon") %>%
       ## zoom to zip
       flyToBounds(lng1 = bounds[1], lat1 = bounds[2],
@@ -1357,12 +1130,13 @@ function(input, output, session) {
                    fill = TRUE, fillColor = "white", fillOpacity = 0.4,
                    data = geom, group = "highlighted_polygon")
   })
-
   
   
-  # TAB 3 - Standing Water ##################################################
-
-  ### Zip code box ----------------
+  
+  
+  # TAB 3: Standing Water ##################################################
+  
+  ## Zip code box ----------------
   ## React to user input and slightly delay response
   zipcodeWater <- reactive(input$zip_box_water)
   zipcodeWater_d <- debounce(zipcodeWater, millis = 1500)
@@ -1387,20 +1161,31 @@ function(input, output, session) {
   ## WATER MAP ------------------------------------------------------------
   output$waterMap <- renderLeaflet({
     leaflet() %>% 
-      ## Add background maps
-      addTiles(group = "OpenStreetMaps") %>% 
+      ## Add background maps (satellite default)
       addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
+      addTiles(group = "OpenStreetMaps") %>%
       
-      ### Zip codes
-      addPolygons(data = zips_sf, color = "#343434",
+      ## Zip codes
+      addPolygons(data = zips_sf, color = "#1c1c1c",
                   weight = 2, fillOpacity = 0.1,
+                  ## hover label
                   label = paste0("Zip code: ", zips_sf$zipcode),
                   labelOptions = labelOptions(textsize = "11px"),
+                  ## hoever highlight
                   highlight = highlightOptions(weight = 5,
                                                color = "white",
                                                bringToFront = TRUE),
                   group = "Zip codes",
-                  layerId = ~zipcode) %>%  
+                  layerId = ~zipcode) %>% 
+      
+      ## Standing water
+      addRasterImage(water_90_r, colors = pal90,
+                     # project = FALSE,
+                     group = "Surface water") %>%
+      
+      # addRasterImage(water_90_r, colors = pal90,
+      #                # project = FALSE,
+      #                group = "Surface water 90m") %>%
       
       ### Kern county
       addPolylines(data = kern_sf,
@@ -1414,24 +1199,32 @@ function(input, output, session) {
       
       ## Create map groups
       addLayersControl(
-        baseGroups = c("OpenStreetMaps", "World Imagery"),
-        overlayGroups = c("Zip codes", "Kern county", "Central Valley"),
+        baseGroups = c("World Imagery", "OpenStreetMaps"),
+        overlayGroups = c("Surface water", 
+                          "Zip codes", 
+                          "Kern county", 
+                          "Central Valley"),
         options = layersControlOptions(collapsed = TRUE),
         position = "topleft") %>% 
       
       ## Don't show all layers by default
-      hideGroup(c("Kern county")) %>%
-
+      hideGroup(c("Kern county", "Central Valley")) %>%
+      
+      ## Add legend 
+      addLegend(pal = pal90, values = values(water_90_r),
+                position = "bottomleft",
+                opacity = 0.8,
+                title = "Standing water </br> length (weeks):") %>% 
+      
       setView(-119.2, 35.38, zoom = 9)
   }) ##END LEAFLET
   
-  ### Interactive Leaflet elements: 
+  ### Interactive Leaflet elements: ---------
   ## Click on zip code polygon to input value in text box
   observe({
     event <- input$waterMap_shape_click
     if(is.null(event$id))
       return()
-    
     ## change text box value
     updateTextInput(session, 
                     inputId = "zip_box_water", 
@@ -1455,115 +1248,101 @@ function(input, output, session) {
                   lng2 = bounds[3], lat2 = bounds[4]) %>%
       ## highlight selected zip
       addPolylines(stroke=TRUE, weight = 5, color="yellow",
-                   fill = TRUE, fillColor = "white", fillOpacity = 0.4,
+                   fill = TRUE, fillColor = "white", fillOpacity = 0.2,
                    data = geom, group = "highlighted_polygon")
   })
   
-
-  output$water_test <- renderUI({
-    if(!(zipcodeWater_d() %in% zips_sf$zipcode)) {
+  
+  
+  ## VIDEO & PLOT ----------------------
+  ## Put video and plot in same card
+  ## seems to be best way to ensure equal height/width
+  output$water_card <- renderUI({
+    ## don't show unless zip selected
+    if (!(zipcodeWater_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
       card(
         full_screen = TRUE,
+        fill = TRUE,
+        ## Split card into two columns
         layout_columns(
-          col_widths = c(6,6),
-          tags$video(src = paste0("vids/zip_", zipcodeWater_d(),
-                                  "_2022_2023.mp4"),
-                     # height = "440px", 
-                     autoplay = TRUE, controls = TRUE),
+          col_widths = c(6, 6),
+          ## video goes on left side
+          tags$video(
+            ## select by zip input
+            src = paste0("vids/zip_",
+                         zipcodeWater_d(),
+                         "_2022_2023.mp4"),
+            autoplay = TRUE,
+            controls = TRUE,
+            ## center vid in column when card is full-screen
+            style="margin-top: auto; margin-bottom: auto;"),
+          ## plot goes on right side
           plotlyOutput("waterTab_plot")
-        )
-      )
+        ),##end columns
+        ## insert responsive caption
+        card_footer(htmlOutput("waterCard_caption"))
+      )##End card
     }
   })
-  ## Water video ------------------
-  # output$waterVid <- renderUI({
-  #     ## Select gif based on zipcode and year
-  #     vid <- paste0("vids/zip_", zipcodeWater_d(),
-  #                   "_2022_2023.mp4")
-  #     tags$video(src = vid,
-  #         height = "440px", autoplay = TRUE, controls = TRUE)
-  #   }
-  # })
-  # 
   
-  ## Standing water time series ----------------
-  
-  ## Filter water data based on zip input
+  ### Filter data -------------
   waterTab_data <- reactive({
     water_filtered <- water_zip_df %>% 
       filter(zipcode == zipcodeWater_d())
     return(water_filtered)
-  })  
+  })
   
-  ## Plot
+  ### Water plot --------------
   output$waterTab_plot <- renderPlotly({
-        ggplotly(
-          ggplot(data = waterTab_data(), aes(x = date, y = acres_int)) +
-          geom_point(color = "dodgerblue3", size = 2, alpha = 0.6,
-                     aes(text = paste0("Week:  ", date, "<br>",
-                                      "Acres:  ", round(acres_int,2)))
-                     ) +
-          geom_line(linewidth = 0.6, color = "dodgerblue4") +
-          labs(y = "Surface water (acres)",
-               x = element_blank()) +
-          scale_x_date(date_breaks = "2 month",
-                       date_labels = "%b\n%Y")+
-          theme_minimal() +
-          theme(
-            axis.title.y = element_text(vjust = 3.5, size = 12),
-            axis.text = element_text(size = 10)
-          ),
-          tooltip = c("text")
-        ) %>% 
-          config(displaylogo = FALSE,
-                 modeBarButtonsToRemove = c("select2d", "lasso2d", "resetScale2d",
-                                            "hoverClosestCartesian",
-                                            "hoverCompareCartesian"))
-      })
-
-  #old one
-  # output$waterTab_plot <- renderUI({
-  #   if (!(zipcodeWater_d() %in% zips_sf$zipcode)) {
-  #     return(NULL)
-  #   } else if (length(waterTab_data()$acres_int)==0) {
-  #     strong("No water data available for this time.")
-  #   } else {
-  #     renderGirafe({
-  #     waterPlot <- ggplot(data = waterTab_data(), aes(x = date, y = acres_int)) +
-  #         geom_point_interactive(color = "dodgerblue3", size = 4, alpha = 0.6,
-  #                    ## interactive elements
-  #                    aes(tooltip = paste0(waterTab_data()$date_plot,
-  #                                         "\n", round(waterTab_data()$acres_int,2),
-  #                                         " acres"), 
-  #                        size = 1.5,
-  #                        tooltip_fill = "dodgerblue4",
-  #                        hover_nearest=TRUE)
-  #                    ) +
-  #         geom_line_interactive(linewidth = 0.6, color = "dodgerblue4") +
-  #         labs(y = "Surface water (acres)",
-  #              x = element_blank()) +
-  #         ## customize axis with cont 'date' class data
-  #         scale_x_date(date_breaks = "2 month",
-  #                      date_labels = "%b\n%Y")+
-  #         theme_minimal() +
-  #         theme(
-  #           # axis.title.x = element_text(face = "bold", vjust = -1),
-  #           axis.title.y = element_text(vjust = 2, size = 12),
-  #           axis.text = element_text(size = 10)
-  #         )
-  #     x <- girafe(ggobj = waterPlot)
-  #            # height_svg = 7, width_svg = 9)
-  #     x <- girafe_options(x, opts_zoom(min = 1, max = 2.5),
-  #                         opts_tooltip(use_fill=TRUE, opacity = 0.8))
-  #     })
-  #   }
-  # })
-
+    ## wrap in plotly
+    ggplotly(
+      ggplot(data = waterTab_data(), 
+             aes(x = date, y = acres_int)) +
+        geom_point(
+          color = "dodgerblue3",
+          size = 2,
+          alpha = 0.6,
+          ## Define tooltip text
+          aes(text = paste0(
+            "Week:  ", date, 
+            "<br>",
+            "Acres:  ", round(acres_int, 2)
+          ))
+        ) +
+        geom_line(linewidth = 0.6, color = "dodgerblue4") +
+        labs(y = "Surface water (acres)",
+             x = element_blank()) +
+        scale_x_date(date_breaks = "2 month",
+                     date_labels = "%b\n%Y") +
+        theme_minimal() +
+        theme(
+          axis.title.y = element_text(vjust = 2, size = 12),
+          axis.text = element_text(size = 10)
+        ),
+      tooltip = c("text")
+    ) %>%
+      ## customize plotly tool menu
+      config(
+        displaylogo = FALSE,
+        modeBarButtonsToRemove = c(
+          "select2d",
+          "lasso2d",
+          "resetScale2d",
+          "hoverClosestCartesian",
+          "hoverCompareCartesian"
+        )
+      )
+  })##End water plot
+  
+  ## CAPTIONS ----------------------
+  ## Video & plot caption
+  output$waterCard_caption <- renderText({
+    paste0("Changes in acreage and location of surface water in zip code ", zipcodeWater_d(), " between 2022-2023. The video (left) displays where surface water was detected (blue) for each date with data. The plot (right) quantifies how surface water differed over time in zip code ", zipcodeWater_d(), ".")
+  })
   
   
-  # TAB 4 - Info ##################################################
-
+  # No server elements for Tab 4 
   
 } ### END SERVER

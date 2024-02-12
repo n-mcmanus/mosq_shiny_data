@@ -360,6 +360,13 @@ rasts_sum_na <- classify(rasts_sum, cbind(0, NA))
 
 ## Save
 writeRaster(rasts_sum_na, here("data/water/summed_water_2022_2023.tif"))
+
+
+## Save 90m version
+r <- rast(here("data/water/summed_water_2022_2023.tif"))
+r_agg <- aggregate(r, fact = 3, fun = "modal")
+writeRaster(r_agg, here("data/water/summed_water_2022_2023_90m.tif"))
+
 ```
 
 
@@ -399,15 +406,13 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
                      length(zips_list))) %>% 
   filter(!date %in% c("2022-03-10","2022-06-06","2022-11-13",
                       "2023-03-13","2023-04-22","2023-05-08",
-                      "2023-05-16","2023-06-09","2023-07-03", "2023-09-21")) %>% 
+                      "2023-05-16","2023-06-09","2023-07-03", 
+                      "2023-09-21","2023-11-08","2023-11-16")) %>% 
   mutate(date_title = lubridate::ymd(date),
          date_title = format(date_title, "%m-%d-%Y"),
          date = gsub("-", "", date)) 
 
 
-
-# library(magick)
-  
 ### Loop to create .mp4 for each zip code
 for (j in 1:length(zips_list)) {
   ## Only look at rasters for one zip at a time
@@ -423,7 +428,7 @@ for (j in 1:length(zips_list)) {
         r <- rast(rasts_filter$rasts[i])
         values(r)[values(r) == 0] <- NA
   
-        zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>%
+        zip <- zips_sf %>%
           filter(zipcode == rasts_filter$zipcode[i]) %>%
           vect() %>%
           project(y=crs(r))
@@ -454,7 +459,7 @@ for (j in 1:length(zips_list)) {
             border-color: #222021;
             background: rgba(255,255,255,0.6);
             font-weight: bold;
-            font-size: 15px;
+            font-size: 25px;
           }"))
           title <- tags$div(
             tag.map.title, rasts_filter$date_title[i]
@@ -494,6 +499,10 @@ for (j in 1:length(zips_list)) {
    av::av_encode_video(png_files, framerate = 2, 
                        output = paste0(here("data/water/vids//"),
                                        "zip_", zips_list[j], "_2022_2023.mp4"))
+   
+   
+   library(magick)
+   
   # ## Output .gif from images
   # gif_convert <- function(x, output) {
   # image_read(x) %>% 

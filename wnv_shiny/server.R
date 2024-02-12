@@ -13,14 +13,12 @@ library(raster)        ## Leaflet-friendly raster pkg
 library(sf)            ## Leaflet-friendly vector pkg
 
 ## Rasters
-# water_r <- raster(here('data/water/summed_water_2022_2023.tif'))
-water_90_r <- raster(here('data/water/summed_water_2022_2023_90m.tif'))
+water_r <- raster(here('data/water/summed_water_90m_2022_2023.tif'))
 # r0_r <- raster(here('data/r0.tif'))
-## Raster color palette
-# pal <- colorBin(palette = 'viridis', domain = values(water_r),
-#                 na.color = "transparent")
-pal90 <- colorBin(palette = 'viridis', domain = values(water_90_r),
-                  na.color = "transparent")
+## Raster color palettes
+water_pal <- colorBin(palette = 'viridis', 
+                      domain = values(water_r),
+                      na.color = "transparent")
 
 ## Vectors
 zips_sf <- st_read(here('data/zipcodes/kern_zips.shp'))
@@ -1179,13 +1177,9 @@ function(input, output, session) {
                   layerId = ~zipcode) %>% 
       
       ## Standing water
-      addRasterImage(water_90_r, colors = pal90,
+      addRasterImage(water_r, colors = water_pal,
                      # project = FALSE,
                      group = "Surface water") %>%
-      
-      # addRasterImage(water_90_r, colors = pal90,
-      #                # project = FALSE,
-      #                group = "Surface water 90m") %>%
       
       ### Kern county
       addPolylines(data = kern_sf,
@@ -1211,7 +1205,7 @@ function(input, output, session) {
       hideGroup(c("Kern county", "Central Valley")) %>%
       
       ## Add legend 
-      addLegend(pal = pal90, values = values(water_90_r),
+      addLegend(pal = water_pal, values = values(water_r),
                 position = "bottomleft",
                 opacity = 0.8,
                 title = "Standing water </br> length (weeks):") %>% 

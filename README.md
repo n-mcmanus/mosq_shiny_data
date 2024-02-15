@@ -4,7 +4,7 @@ This project contains all the data and code necessary for running the Kern MBD S
 
 ## File structure:
 * `data_prep.Rmd`: the R markdown used for generating tabular, raster, and video data used in the Shiny app.
-* `wnv_shiny/`: this directory contains all the script necessary for running the Shiny, which includes the `server.R`, `ui.R`, and a custom CSS file (`styles.css`). 
+* `shiny/`: this directory contains all the script necessary for running the Shiny, which includes the `server.R`, `ui.R`, and a custom CSS file (`styles.css`). 
     * `www/`: folder with images and videos included in the Shiny.
 * `data/`:  contains the raw and generated data used in the Shiny
     * `central_valley/`: contains the associated SHP files for the entire CA central valley (Alluvial_Bnd.shp) as well as the portion of the valley only within Kern County (valley.shp)

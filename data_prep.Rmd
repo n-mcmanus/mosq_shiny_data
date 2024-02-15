@@ -359,10 +359,12 @@ rasts_sum_na <- terra::classify(rasts_sum, cbind(0, NA))
 writeRaster(rasts_sum_na, here("data/water/summed_water_30m_2022_2023.tif"))
 
 
-## Save 90m version (faster load time in shiny)
-r <- rast(here("data/water/summed_water_30m_2022_2023.tif"))
-r_agg <- terra::aggregate(r, fact = 3, fun = "modal")
-writeRaster(r_agg, here("data/water/summed_water_90m_2022_2023.tif"))
+## Save 90m version in leaflet crs
+## Loads faster and matches basemap
+r <- rast(here("data/water/summed_water_30m_2022_2023.tif")) 
+r_agg <- terra::aggregate(r, fact = 3, fun = "modal")  %>% 
+  project(y = "epsg:3857")
+writeRaster(r_agg, here("data/water/summed_water_90m_2022_2023.tif"), overwrite = TRUE)
 ```
 
 

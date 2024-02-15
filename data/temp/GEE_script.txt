@@ -1,0 +1,69 @@
+// Import PRISM data from GEE collection
+// and zipcodes from personal upload
+var PRISM = ee.ImageCollection("OREGONSTATE/PRISM/AN81d"),
+    zips = ee.FeatureCollection("users/n-mcmanus/kern_zips"),
+    image = ee.Image("LANDSAT/LC08/C02/T1_TOA/LC08_044034_20140318");
+
+
+// Function clips images to zipcodes for whole collection
+var clipToZip = function(image){
+  return image.clip(zips);
+};
+
+// Select time range (2018-2023) 
+// and clip collection to zip codes
+var dataset = ee.ImageCollection(PRISM)
+                  .filter(ee.Filter.date('2010-04-01', '2023-09-30')).map(clipToZip);
+
+
+// Select bands
+var tmean = dataset.select('tmean');
+
+// Charts One Year for all reserves:
+var chart =
+    ui.Chart.image
+        .seriesByRegion({
+          imageCollection: tmean,
+          regions: zips,
+          reducer: ee.Reducer.mean(),
+          // scale: 4000,
+          seriesProperty: 'Name_1',
+          xProperty: 'system:time_start'
+        })
+        .setOptions({
+          title: 'Average tmean by Date',
+          hAxis: {title: 'Date', titleTextStyle: {italic: false, bold: true}},
+          vAxis: {
+            title: 'Celsius',
+            titleTextStyle: {italic: false, bold: true}
+          },
+          lineWidth: 2,
+          //colors: ['f0af07', '0f8755', '76b349'],
+        });
+
+
+//////////////////////////////////////////////////////
+
+
+// data export
+// Export to csv and maintain 'Id' labels:
+//   collect region, image, value triplets:
+var triplets = tmean.map(function(image) {
+  return image.select('tmean').reduceRegions({
+    collection: zips.select(['GEOID10']), 
+    reducer: ee.Reducer.mean()
+  }).filter(ee.Filter.neq('mean', null))
+    .map(function(f) { 
+      return f.set('imageID', image.id());
+    });
+}).flatten();
+
+
+Export.table.toDrive({
+  collection: triplets,
+  // remove .geo and system:index columns from csv output 
+  selectors: ['imageID', 'GEOID10', 'mean'],
+  description: 'kern_tmean_table',
+  fileFormat: 'CSV'
+});
+

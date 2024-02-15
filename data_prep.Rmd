@@ -354,9 +354,13 @@ rasts_list <- terra::rast(
     })
   )
 
-## add stack and export
+## add stack
 rasts_sum <- sum(rasts_list)
-writeRaster(rasts_sum, here("data/water/summed_water_2022_2023.tif"))
+
+## put in leaflet-friendly crs and export
+rasts_sum_reproj <- terra::project(rasts_sum, "+proj=longlat +datum=WGS84")
+writeRaster(rasts_sum_reproj, here("data/water/summed_water_2022_2023.tif"),
+            overwrite = TRUE)
 ```
 
 

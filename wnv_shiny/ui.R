@@ -27,15 +27,16 @@ ui <- page_navbar(
       tags$a(href = "https://www.kernmosquito.com/", "Kern Mosquito and Vector Control District,"),
       "who deploy mosquito traps throughout the county. These pools of trapped mosquitos are then counted and tested for a range of MBD. To standardize for monitoring effort, abundance and MBD cases are reported as mosquitos per trap night and minimum infection rate (MIR), respectively. Details on these metrics can be found by pressing the ",
       bs_icon("question-circle", size = "1em"),
-      " on their respective figures. For more details on mosquito species and MBD, please visit the Information ",
-      # If we want to link to another tab. Maybe don't need though??
-      actionLink("link_to_info", "tab.")
+      " on their respective figures. For more details on mosquito species and MBD, please visit the Information tab."
+      # Example for linking to another tab. Not sure if it's necessary here though
+      # actionLink("link_to_info", "tab.")
     ),
     
     ## Map with sidebar
     card(
       height = 500,
       full_screen = TRUE, ##Allows for option of full screen
+      ## Removed this for now, but could be added back if functionality is built out
       # card_header(
       #   popover(
       #     trigger = bs_icon("bar-chart-fill", class = "ms-auto"),
@@ -149,17 +150,17 @@ ui <- page_navbar(
                               class = "panel panel-default",
                               fixed = TRUE, draggable = TRUE,
                               top = 80, left = "auto", right = 20, bottom = "auto",
-                              width = 350, height = "auto", cursor = "move",
+                              width = 380, height = "auto", cursor = "move",
                               
                               ## Zip code
-                              textInput(inputId = "zip_box", label = h4("Zip code:"),
+                              textInput(inputId = "zip_box", label = h5("Zip code:"),
                                         value = NULL,
                                         placeholder = "Enter your zip code..."
                               ),
                               
                               ## Date range:
                               dateRangeInput("risk_dateRange",
-                                             label = h4("Date range:"),
+                                             label = h5("Date range:"),
                                              start = "2023-01-01",
                                              end = "2023-09-30",
                                              ## don't let user select dates 
@@ -169,31 +170,26 @@ ui <- page_navbar(
                               ),
                               htmlOutput("date_line"),
                               
+                              ### For when R0 is incorporated
                               ## R0 text 
                               # htmlOutput("r0_header"),
                               # htmlOutput("r0_value"),
                               # htmlOutput("r0_line"),
                               
-                              ##test accordions
-                              # htmlOutput("riskAccordion")
-                              # accordion(
-                              #   accordion_panel(
-                              #     "Temperature"
-                              #   ),
-                              #   accordion_panel(
-                              #     "Water"
-                              #   )
-                              # )
+                              ## Putting temp and water in drop-down menus
+                              htmlOutput("riskAccordion")
                               
+                              ### If not using drop-down menus, use
+                              ### this code below
                               ## Temp plot
-                              htmlOutput("temp_header"),
-                              htmlOutput("tempDays_text"),
-                              plotOutput("temp_plot", height = 180),
-                              htmlOutput("temp_line"),
-                              
-                              ## Standing water plot
-                              htmlOutput("water_header"),
-                              plotOutput("water_plot", height = 170)
+                              # htmlOutput("temp_header"),
+                              # htmlOutput("tempDays_text"),
+                              # plotOutput("temp_plot", height = 180),
+                              # htmlOutput("temp_line"),
+                              # 
+                              # ## Standing water plot
+                              # htmlOutput("water_header"),
+                              # plotOutput("water_plot", height = 170)
                               
                 ) ##END panel
             )
@@ -202,8 +198,8 @@ ui <- page_navbar(
   
   
   
-  # TAB 3: STANDING WATER  --------------------------------------------------
-  nav_panel("Standing water",
+  # TAB 3: SURFACE WATER  --------------------------------------------------
+  nav_panel("Surface water",
             value = "tab3",
             h2("Surface Water in Kern County"),
             p("Here you can explore the changes in surface water between 2022-2023. Either select a zip code on the map to the right or enter one in the box below to see when and where surface water was present. Surface water can provide breeding habitat for mosquitoes; therefore, proximity to slow-moving or standing water may result in increased mosquito abundance and mosquito-borne disease risk. For more information, please visit the Information tab."),
@@ -229,7 +225,7 @@ ui <- page_navbar(
                             placeholder = "Enter your zip code...")
                 )
               ),##End sidebar
-              card_footer("Interactive map of surface water in Kern County zip codes. Select a zip code to view how surface water changes over time. The water imagery 'heat map' displays how often surface water was present in a given location throughout 2022-2023. Base map imagery, county borders, and the water image can all be toggled using the map options in the upper left corner.")
+              card_footer("Interactive map of surface water in Kern County zip codes. The water imagery 'heat map' displays how many weeks surface water was present in a given location throughout 2022-2023, with darker blue areas having the most persistent surface water. Select a zip code to view how surface water changes over time. Base map imagery, county borders, and the water image can all be toggled using the map options in the upper left corner.")
             ),##End map card
             
             
@@ -257,64 +253,33 @@ ui <- page_navbar(
                   navset_card_underline(
                     ## Culex spp
                     nav_panel(
-                      title = p(em("Culex"), "mosquitoes"),
+                      title = em("Culex spp."),
                       img(src = "c_tarsalis.jpg",
-                          width = "60%",
-                          style = 'border: 1px solid #2d3e50'),
+                          width = "70%",
+                          style = 'border: 1px solid #2d3e50;
+                          margin-right: auto; margin-left: auto;'),
                       p("The majority of mosquitoes in Kern County belong to the", em("Culex"), "genus. These mosquitoes are the primary vectors for West Nile, St. Louis encephalitis, and equine encephalitis viruses. ", em("Culex"), " mosquitoes breed in agricultural, natural, and human-made water sources, such as ornamental ponds, ditches, and puddles. Females lay their eggs on the surface of standing water, and within 10-14 days these eggs develop into adult mosquitoes that can fly away from the breeding site (Manimegalai & Sukanya, 2014). ", em("Culex"), " mosquitoes are most active at dawn, dusk, and after dark.")
                     ),
                     ## A. aegypti
                     nav_panel(
-                      title = p(em("A. aegypti")),
+                      title = em("A. aegypti"),
                       img(src="a_aegypti.jpg",
-                          width = "60%",
-                          style = 'border: 1px solid #2d3e50'), 
+                          width = "70%",
+                          style = 'border: 1px solid #2d3e50;
+                          margin-right: auto; margin-left: auto;'),
                       p(em("Aedes aegypti"), ", commonly known as the yellow fever mosquito, can transmit zika, chikungunya, dengue, and yellow fever viruses (CDPH, 2023B; Pliego Pliego et al, 2017). Unlike", em("Culex"), "mosquitoes,", em("A. aegypti"), "are active during daytime as well as dawn and dusk. This species can breed in very small sources of standing water, such as bottle caps, allowing it to thrive in urban environments. Their life cycle closely follows that of ", em("Culex"), " mosquitoes; however, it takes only 7-10 days for an egg to develop into an adult mosquito (CDPH, 2023B).")
                     ),
-                    nav_spacer()
-                    # nav_menu(
-                    #   title = "Links",
-                    #   nav_item("Future links to more info here")
-                    # )
                   ),## End tabs
                   card(
-                    card_header("Life cycle"),
+                    card_header("Mosquito Life Cycle"),
                     img(src="lifecycle.png",
-                        # width = "30%",
+                        width = "80%",
+                        style="margin-top: auto; margin-bottom: auto; 
+                        margin-left: auto; margin-right: auto;"
                         # style = 'border: 1px solid #2d3e50'
                     )
                   )##end card
-                  
-                  
-                ),
-                # navset_card_underline(
-                #   ## Culex spp
-                #   nav_panel(
-                #     title = p(em("Culex"), "mosquitoes"),
-                #     img(src = "c_tarsalis.jpg",
-                #         width = "30%",
-                #         style = 'border: 1px solid #2d3e50'),
-                #     p("The majority of mosquitoes in Kern County belong to the", em("Culex"), "genus. These mosquitoes are the primary vectors for West Nile, St. Louis encephalitis, and equine encephalitis viruses. ", em("Culex"), " mosquitoes breed in agricultural, natural, and human-made water sources, such as ornamental ponds, ditches, and puddles. Females lay their eggs on the surface of standing water, and within 10-14 days these eggs develop into adult mosquitoes that can fly away from the breeding site (Manimegalai & Sukanya, 2014). ", em("Culex"), " mosquitoes are most active at dawn, dusk, and after dark.")
-                #             ),
-                #   ## A. aegypti
-                #   nav_panel(
-                #     title = p(em("A. aegypti")),
-                #     img(src="a_aegypti.jpg",
-                #         width = "30%",
-                #         style = 'border: 1px solid #2d3e50'), 
-                #     p(em("Aedes aegypti"), ", commonly known as the yellow fever mosquito, can transmit zika, chikungunya, dengue, and yellow fever viruses (CDPH, 2023B; Pliego Pliego et al, 2017). Unlike", em("Culex"), "mosquitoes,", em("A. aegypti"), "are active during daytime as well as dawn and dusk. This species can breed in very small sources of standing water, such as bottle caps, allowing it to thrive in urban environments. Their life cycle closely follows that of ", em("Culex"), " mosquitoes; however, it takes only 7-10 days for an egg to develop into an adult mosquito (CDPH, 2023B).")
-                #             ),
-                #   nav_spacer()
-                #   # nav_menu(
-                #   #   title = "Links",
-                #   #   nav_item("Future links to more info here")
-                #   # )
-                #  ),## End tabs
-                # img(src="lifecycle.png",
-                #     width = "30%",
-                #     style = 'border: 1px solid #2d3e50')
-                ## tabs of spp
-                
+                ),##end columns
               ),## End panel
               
               ## MBD panel

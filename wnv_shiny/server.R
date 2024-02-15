@@ -14,9 +14,9 @@ library(sf)            ## Leaflet-friendly vector pkg
 
 ## Rasters
 water_r <- raster(here('data/water/summed_water_90m_2022_2023.tif'))
-# r0_r <- raster(here('data/r0.tif'))
+
 ## Raster color palettes
-water_pal <- colorBin(palette = 'viridis', 
+water_pal <- colorBin(palette = 'Blues', 
                       domain = values(water_r),
                       na.color = "transparent")
 
@@ -850,39 +850,44 @@ function(input, output, session) {
   #   }
   # })
   
-  ## test accordion
-  # output$riskAccordion <- renderUI({
-  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
-  #     return(NULL)
-  #   } else {
-  #   accordion(
-  #     accordion_panel(
-  #       "Temperature:",
-  #       htmlOutput("tempDays_text"),
-  #       plotOutput("temp_plot", height = 180)
-  #     ),
-  #     accordion_panel(
-  #       "Standing Water:",
-  #       plotOutput("water_plot", height = 170)
-  #     )
-  #   )
-  #   }
-  #   
-  # })
   
+  
+  #### Drop-down menus for temp and water --------------
+  output$riskAccordion <- renderUI({
+    if(!(zipcode_d() %in% zips_sf$zipcode)) {
+      return(NULL)
+    } else {
+    accordion(
+      width = "100%",
+      accordion_panel(
+        "Temperature:",
+        ## reduce margin size
+        class = "p-1",
+        htmlOutput("tempDays_text"),
+        plotOutput("temp_plot", height = 180)
+      ),
+      accordion_panel(
+        "Standing Water:",
+        class = "p-1",
+        plotOutput("water_plot", height = 170)
+      )
+    )
+    }
+
+  })
   
   
   
   #### Temperature -------------------
-  ## Temp header
-  output$temp_header <- renderText({
-    ## If invalid zip, don't show text
-    if(!(zipcode_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      paste("<h4>", "Temperature:", "</h4>")
-    }
-  })
+  ## Temp header (use this code if removing drop-down menu)
+  # output$temp_header <- renderText({
+  #   ## If invalid zip, don't show text
+  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #   } else {
+  #     paste("<h4>", "Temperature:", "</h4>")
+  #   }
+  # })
   
   ## Filter temp data based on zip input
   temp_zip <- reactive({
@@ -969,26 +974,26 @@ function(input, output, session) {
     }
   })
   
-  ## Line
-  output$temp_line <- renderUI({
-    ## If invalid zip input, don't show text
-    if (!(zipcode_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      hr(style = 'border-top: 1.5px solid #2d3e50')
-    }
-  })
+  ## Line (use this code if removing drop-down menus)
+  # output$temp_line <- renderUI({
+  #   ## If invalid zip input, don't show text
+  #   if (!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #   } else {
+  #     hr(style = 'border-top: 1.5px solid #2d3e50')
+  #   }
+  # })
   
   
   #### Water ----------------------------
-  ## Standing water header
-  output$water_header <- renderText({
-    if(!(zipcode_d() %in% zips_sf$zipcode)) {
-      return(NULL)
-    } else {
-      paste("<h4>", "Standing water:", "</h4>")
-    }
-  })
+  ## Standing water header (use code if removing drop-down menu)
+  # output$water_header <- renderText({
+  #   if(!(zipcode_d() %in% zips_sf$zipcode)) {
+  #     return(NULL)
+  #   } else {
+  #     paste("<h4>", "Standing water:", "</h4>")
+  #   }
+  # })
   
   ## Filter water data based on zip input
   water_zip <- reactive({
@@ -997,7 +1002,6 @@ function(input, output, session) {
              date >= input$risk_dateRange[1] & date <= input$risk_dateRange[2]) 
     return(water_filtered)
   })   
-  
   
   ## Standing water time series
   output$water_plot <- renderPlot({
@@ -1036,14 +1040,7 @@ function(input, output, session) {
       ## Add background maps (OSM default)
       addTiles(group = "OpenStreetMaps") %>% 
       addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
-      
-      #### Add rasters
-      ## Transmission efficiency
-      # addRasterImage(r0_r, colors = r0_pal, 
-      #                project = FALSE, group = "R0") %>%
-      
-      
-      #### Add vectors 
+
       ## Zip codes
       addPolygons(data = zips_sf, color = "#343434",
                   weight = 2, fillOpacity = 0.1,
@@ -1067,7 +1064,7 @@ function(input, output, session) {
                    color = 'blue', weight = 2.5, fillOpacity = 0,
                    group = "Central Valley") %>%
       
-      #### Create map groups
+      ## Create map groups
       addLayersControl(
         baseGroups = c("OpenStreetMaps", "World Imagery"),
         ## Add R0 layer here later
@@ -1078,7 +1075,7 @@ function(input, output, session) {
       ## Don't show all layers by default
       hideGroup(c("Central Valley")) %>% 
       
-      #### Add map inset
+      ## Add map inset
       addMiniMap(
         tiles = providers$Esri.WorldStreetMap,
         zoomLevelOffset = -5,
@@ -1087,10 +1084,7 @@ function(input, output, session) {
       
       setView(-119.2, 35.38, zoom = 10)
     
-    #### Add legend 
-    # addLegend(pal = r0_pal, values = values(r0_r),
-    #           position = "topleft",
-    #           title = "WNV Transmission </br> Efficiency") 
+
   }) ## END LEAFLET
   
   
@@ -1178,7 +1172,7 @@ function(input, output, session) {
       
       ## Standing water
       addRasterImage(water_r, colors = water_pal,
-                     # project = FALSE,
+                     project = FALSE,
                      group = "Surface water") %>%
       
       ### Kern county
@@ -1208,7 +1202,7 @@ function(input, output, session) {
       addLegend(pal = water_pal, values = values(water_r),
                 position = "bottomleft",
                 opacity = 0.8,
-                title = "Standing water </br> length (weeks):") %>% 
+                title = "# weeks surface </br> water observed:") %>% 
       
       setView(-119.2, 35.38, zoom = 9)
   }) ##END LEAFLET

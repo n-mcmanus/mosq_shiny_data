@@ -30,29 +30,35 @@ We want to find and save the zip codes located within the Central Valley portion
 
 *Note*: For the purposes of this app, the extent of zip codes will be cropped to only portions within both Kern county and the Central Valley. To remove artifacts of zip code portions that only slightly intersect with Kern, we'll also remove any zip code with an area below 1,000,000 m^2. To keep the entire geometry of zips that are within Kern, see the commented out code chunk at the end of this section. 
 ```{r}
-## Read in data w/ 'sf' pkg (easier to filter by attribute).
-## After filtering, make SpatVect obj (`terra` pkg)
+## Read in data w/ sf::st_read() bc sf obj easier to filter
+## Then transform to SpatVect obj with terra::vect() for easier geoprocessing
 
+## Read in all counties in CA, keep only Kern
 kern <- st_read(here('data/counties_ca/cnty19_1.shp')) %>% 
   ## Only keep kern county
   dplyr::filter(COUNTY_NAM == "Kern") %>%
   dplyr::select(COUNTY_NAM) %>% 
   terra::vect() 
 
+## Read in central valley shp
 valley <- st_read(here('data/central_valley/Alluvial_Bnd.shp')) %>% 
+  ## same crs as kern vect
   st_transform(crs = st_crs(kern)) %>% 
   vect() %>% 
-  ## Only keep portion w/in Kern
+  ## Only keep portion w/in Kern county
   terra::intersect(kern)
 
-zips <- st_read(here('data/zipcodes/CA_Zips.shp')) %>% 
+## Read in all zipcodes in CA
+zips <- st_read(here('data/zipcodes/CA_Zips.shp')) %>%
+  ## match kern crs
   st_transform(crs = st_crs(kern)) %>% 
   vect() %>% 
+  ## only keep parts in kern & central valley
   terra::intersect(valley) %>% 
   st_as_sf() %>% 
   dplyr::select(GEOID10) %>% 
   rename(zipcode = GEOID10) %>% 
-  ## best crs for calculating area(?)
+  ## change to better crs for calc local area
   st_transform(crs = "epsg:3310")
 
 ## find area and remove small cropped zips
@@ -76,39 +82,6 @@ writeVector(valley, here('data/central_valley/valley.shp'), overwrite = T)
 
 ```
 
-```{r}
-# ## Read in raw data
-# zips <- st_read(here('data/zipcodes/CA_Zips.shp'))
-# counties <- st_read(here('data/counties_ca/cnty19_1.shp')) 
-# 
-# ## make sure both layers have same crs
-# zips_trans <- zips %>% 
-#   st_transform(zips, crs = st_crs(counties)) %>%
-#   ## only need to keep zipcode number
-#   dplyr::select(GEOID10) 
-# 
-# ## Only keep name of counties
-# counties <- dplyr::select(counties, COUNTY_NAM)
-# 
-# # kern <- dplyr::filter(counties, COUNTY_NAM == "Kern") 
-# 
-# 
-# ## Keep zipcodes that touch Kern county
-# kern_zips <- st_join(zips_trans, counties, join = st_intersects) %>% 
-#   dplyr::filter(COUNTY_NAM == "Kern", 
-#                 ## remove select zips that barely touch Kern
-#                 !GEOID10 %in% c(93536, 93535, 93201, 
-#                                 93239, 93204, 93453,
-#                                 93257, 93260, 93219, 
-#                                 93261, 93218)) 
-#   
-# ## Reproject zips to leaflet-required crs
-# kern_zips_trans <- st_transform(kern_zips, crs = "+proj=longlat +datum=WGS84")
-# 
-# ## save
-# st_write(kern_zips_trans, here("data/zipcodes/kern_zips.shp"))
-
-```
 
 
 # Standing water
@@ -137,7 +110,7 @@ convert_tif(path = here("data/water/Landsat_Dan/newfiles_temp/42r36//"))
 ```
 
 ### Merge images
-Our AOI is split between two Landsat images (rows 35 and row 36 within path 42). First we'll mask the rasters with the "QA_PIXEL" files to ensure only locations with water have a value of 1. Then, we'll merge the two row images them by date, reproject it the crs for Leaflet, and crop/mask it Kern county. 
+Our AOI is split between two Landsat images (rows 35 and row 36 within path 42). First we'll mask the rasters with the "QA_PIXEL" files to ensure only locations with water have a value of 1. Then, we'll merge the two row images by date, reproject it the crs for Leaflet, and crop/mask it Kern county. 
 - **NOTE:** Change input/output file paths to 2022 or 2023 depending on year.
 ```{r}
 ## kern county
@@ -184,34 +157,44 @@ waterMerge <- function(rast35, mask35, rast36, mask36, date, kern, pathOut) {
   ## mask raster 36
   r_masked36 <- terra::mask(r36, m36)
  
-  ## merge rasts using SpatRastCollection
+  ## merge rasts using SpatRastCollection -----
   s <- sprc(r_masked35, r_masked36)
   m <- merge(s)
-  ## Save merged rasts
-  terra::writeRaster(m, filename=paste0(pathOut,"p42_merged_",date,".tif"),
+  
+  ## Save merged rasts (entire extent)
+  terra::writeRaster(m,
+                     filename = paste0(pathOut, "p42_merged_", date, ".tif"),
                      overwrite = TRUE)
-
-  ## reproject kern vect to crs of raster bc faster
+  
+  ## Crop merged rasts to Kern county ---------
+  ## faster to reproject kern vect to raster crs
   kern_reproj = project(kern, y = crs(m))
   ## crop/mask merged rast to kern county
   m_kern = crop(m, kern_reproj, mask = TRUE)
-  ## Save kern masked raster
-  terra::writeRaster(m_kern, filename=paste0(pathOut,"p42_kern_",date,".tif"),
-                     overwrite = TRUE)
+  ## Save kern cropped/masked raster 
+  terra::writeRaster(
+    m_kern,
+    filename = paste0(pathOut, "p42_kern_", date, ".tif"),
+    overwrite = TRUE
+  )
 }
 
 ## Run fxn for all files in directory
-purrr::pmap(waterInput_df, waterMerge, kern=kern,
-            pathOut = here("data/water/p042_masked_merged/2023//"),
-            .progress = TRUE)
+purrr::pmap(
+  .l = waterInput_df,
+  .f = waterMerge,
+  kern = kern,
+  pathOut = here("data/water/p042_masked_merged/2023//"),
+  .progress = TRUE
+)
 ```
 
 
 ### Zonal stats
-Here we determine how much standing water is present within each zip code for each image date. The larger `waterZonal()` fxn (which contains several more fxns inside) reads in our rasters and vector of interest, reprojects where needed, and iterates the zonal function over all the rasters in a given directory. We'll run this fxn for 2023 and 2022 rasters, then merge the results and export a single .csv.
+Here we determine how much standing water is present within each zip code for each image date. The `waterZonal()` fxn (a wrapper fxn with several more inside) reads in our rasters and vector of interest, reprojects where needed, and iterates the zonal function over all the rasters in a given directory. We'll run this fxn for 2023 and 2022 rasters, then merge the results and export a single .csv.
 ```{r}
 waterZonal <- function(rastPath, vect) {
-    ## Fxn to get dates
+    ## Fxn to get dates from file names
     dates <- function(files) {
       str_split(files, "_", simplify = TRUE) %>% 
       as.data.frame() %>%
@@ -220,34 +203,41 @@ waterZonal <- function(rastPath, vect) {
     }
     
     ## One dataframe with all files and dates
-    df <- data.frame("rasts" = list.files(rastPath, pattern="kern")) %>% 
+    df <- data.frame("rasts" = list.files(rastPath, 
+                                          ## we want the cropped/masked rasts
+                                          pattern = "kern")) %>% 
       ## extract date from r35
       mutate(dates(rasts),
              rasts = paste0(rastPath, rasts))
     
     ## Need same crs for zonal stats.
     ## Easier to transform vector than the high-res raster
+    ## Read in sample raster from list
     r <- rast(df$rasts[1])
     vect <- project(vect, y = crs(r))
     
     ## Fxn to perform zonal stats and output results
     zonalFxn <- function(rasts, vect, date) {
-      r = terra::rast(rasts)
+      r <- terra::rast(rasts)
+      ## find total #cells with water by zip
       zonalStat <- terra::zonal(r, vect, fun = 'sum', na.rm = TRUE)
+      ## store results in tidy df
       zonalStat_df <- zonalStat %>%
         ## assign values with corresponding zipcode
         mutate(zipcode = vect$zipcode, .before = 1) %>%
-        ## convert values from # of pixels to acres
-        ## w/30m resolution, each pixel is 900 m^2
+        ## Convert values from #cells to acres.
+        ## At 30m resolution, each pixel is 900 m^2.
         ## 4046.86 m^2 are in one acre
         rename(ncells = "rast") %>%
         mutate(acres = ncells * 900 / 4046.86) %>%
-        ## finally, add date image was taken
+        ## finally, add image date
         mutate(date = date)
     }
     
     ## Run fxn over list w/pmap
-    waterStats_df <- pmap_dfr(df, zonalFxn, vect=vect, 
+    waterStats_df <- pmap_dfr(.x = df, 
+                              .f = zonalFxn, 
+                              vect = vect,
                               .progress = TRUE)
     
 } ##END FXN
@@ -258,8 +248,8 @@ path22 <- here('data/water/p042_masked_merged/2022//')
 vect <- vect(here("data/zipcodes/kern_zips.shp"))
 
 ## Run fxn for 2023 and 2022 and bind results to one df
-waterStats_df = rbind(waterZonal(rastPath=path22, vect=vect),
-                      waterZonal(rastPath=path23, vect=vect)) %>% 
+waterStats_df = rbind(waterZonal(rastPath = path22, vect = vect),
+                      waterZonal(rastPath = path23, vect = vect)) %>%
   mutate(date_plot = format(as.Date(date), '%b-%d-%Y'))
 
 ## export as .csv
@@ -269,13 +259,14 @@ write_csv(waterStats_df, here('data/water/water_acre_zipcode.csv'))
 ##### Cloud issues
 There are some cloud issues with masking for standing water. The values for select dates will be replaced by an averaged value from the date prior and following.
 ```{r}
+## Read in data generated from pervious code chunk
 waterStats_df = read_csv(here("data/water/water_acre_zipcode.csv")) %>% 
   mutate(date = as.character(date))
 
+## Df interpolated & removed values
 water_int_df = waterStats_df %>% 
   group_by(zipcode) %>% 
-  ## remove first/last bad dates
-  ## (not enough info to interpolate)
+  ## remove first/last bad dates (not enough info to interpolate)
   filter(!date %in% c("2022-03-10", "2023-11-08", "2023-11-16")) %>% 
   ## For four dates, just avg values directly before/after
   mutate(acres_int = case_when(date %in% c("2022-06-06",
@@ -285,14 +276,15 @@ water_int_df = waterStats_df %>%
                                            "2023-07-03",
                                            "2023-09-21") 
                                ~((lead(acres, n = 1)+lag(acres, n = 1))/2),
-                               ## B/c these dates have larger gaps on either side, 
+                               ## These dates have larger gaps on either side, 
                                ## replace w/NA then interpolate
                                date %in% c("2023-03-13",
                                            "2023-05-08",
                                            "2023-05-16") 
                                ~NA,
                                .default = acres)) %>% 
-  mutate(acres_int = na.approx(acres_int)) %>% 
+  mutate(acres_int = zoo::na.approx(acres_int)) %>% 
+  ## Repeat process for number of cells
   mutate(ncells_int = case_when(date %in% c("2022-06-06",
                                             "2022-11-13",
                                             "2023-04-22",
@@ -305,36 +297,42 @@ water_int_df = waterStats_df %>%
                                            "2023-05-16") 
                                ~NA,
                                .default = ncells)) %>%   
-  mutate(ncells_int = round(na.approx(ncells_int),0))
+  ## want whole num for #cells
+  mutate(ncells_int = round(zoo::na.approx(ncells_int),0))
 
+## save over as updated csv
 write_csv(water_int_df, here("data/water/water_acre_zipcode.csv"))
 
 ```
 
 
 ### Water persistence raster
-Here we'll perform some simple "raster math" to get a better idea of how frequently certain areas of Kern County are flooded.
+Here we'll perform some simple "raster math" to get a better idea of how frequently certain areas of Kern County are flooded. Because the extent of each satellite image is slightly different, we'll first have to ensure all rasters are the exact same extent by resampling.
 ```{r}
 ## List all rasters
 path23 = here("data/water/p042_masked_merged/2023//")
 path22 = here("data/water/p042_masked_merged/2022//")
 
-rasts <- list.files(path22, pattern = "kern", full.names=FALSE) %>% 
-  append(., list.files(path23, pattern="kern", full.names=FALSE))
+rasts <- list.files(path22, pattern = "kern", full.names = FALSE) %>%
+  append(., list.files(path23, pattern = "kern", full.names = FALSE))
 
 ## Fxn to extract date from file name
+## Only works if "full.names" arg is FALSE when making list
 dates <- function(files) {
       str_split(files, "_", simplify = TRUE) %>% 
       as.data.frame() %>%
       mutate(date = lubridate::ymd(V3)) %>%
       dplyr::select(date)
 }
+
 ## Filter out bad dates from raster list
 rasts_df <- data.frame(rasts = rasts,
-                       date = dates(rasts)) %>% 
+                       date = dates(rasts)) %>%
+  ## list all files in directory
   mutate(rasts = list.files(here("data/water/p042_masked_merged/"),
                                 pattern="kern", recursive = TRUE, 
                                 full.names=TRUE)) %>% 
+  ## remove bad dates
   dplyr::filter(!date %in% c("2022-03-10","2022-06-06","2022-11-13",
                              "2023-03-13","2023-04-22","2023-05-08",
                              "2023-05-16","2023-06-09","2023-07-03", 
@@ -345,29 +343,36 @@ rasts_df <- data.frame(rasts = rasts,
 sample_r <- rast(rasts_df$rasts[1])
 
 ## "stack" resampled rasters in terra-friendly format
-rasts_list <- terra::rast(
-  lapply(rasts_df$rasts, function(x) {
-    r <- rast(x) %>%
-      resample(y = sample_r, 
-               ##categorical (water/no water)
-               method = "near")
-    })
-  )
+## resample rasters as being read into stack
+rasts_list <- terra::rast(lapply(rasts_df$rasts, function(x) {
+  r <- rast(x) %>%
+    resample(y = sample_r,
+             ##categorical (water/no water)
+             method = "near")
+}))
 
-## add stack
+
+## Add stack layers, then replace 0 with NA
 rasts_sum <- sum(rasts_list)
+rasts_sum_na <- terra::classify(rasts_sum, cbind(0, NA))
 
-## put in leaflet-friendly crs and export
-rasts_sum_reproj <- terra::project(rasts_sum, "+proj=longlat +datum=WGS84")
-writeRaster(rasts_sum_reproj, here("data/water/summed_water_2022_2023.tif"),
-            overwrite = TRUE)
+## Save 30m version
+writeRaster(rasts_sum_na, here("data/water/summed_water_30m_2022_2023.tif"))
+
+
+## Save 90m version in leaflet crs
+## Loads faster and matches basemap
+r <- rast(here("data/water/summed_water_30m_2022_2023.tif")) 
+r_agg <- terra::aggregate(r, fact = 3, fun = "modal")  %>% 
+  project(y = "epsg:3857")
+writeRaster(r_agg, here("data/water/summed_water_90m_2022_2023.tif"), overwrite = TRUE)
 ```
 
 
 ### Animate rasters
-Here we'll generate a movie (.mp4) that goes through a time series of standing water images by zip code. This is done creating a series of maps using `leaflet`, capturing those maps as images (.png), and finally converting the images into an .mp4. 
+Here we'll generate a movie (.mp4) that goes through a time series of standing water images by zip code. This is done creating a series of maps using `leaflet`, capturing those maps as images (.png) using `webshot`, and finally converting the images into an .mp4. 
 
-- **NOTE:** This was originally done as a .gif, but the file sizes were far to big to host them all on the Shiny. The code for converting .png to .gif (rather than .mp4) in commented out at the end of the fxn for reference. 
+- **NOTE:** This was originally done as a .gif, but the file sizes were far to big to host them all on the Shiny. The code for converting .png to .gif (rather than .mp4) in commented out at the end of the fxn for future reference. 
 ```{r}
 ## List all rasters
 path23 = here("data/water/p042_masked_merged/2023//")
@@ -384,14 +389,14 @@ dates <- function(files) {
       dplyr::select(date)
  }
 
-## df of all zipcodes
+## list of all zipcodes
 zips_sf <- read_sf(here("data/zipcodes/kern_zips.shp"))
 zips_list = unique(zips_sf$zipcode)
 
 ## df of file paths and dates of rasters to be visualized
 rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
                       zipcode = rep(zips_list, each=length(rasts))) %>% 
-  ## Add dates, then remove select rasters based on them
+  ## Add dates, then remove select bad rasters (cloud)
   mutate(dates(rasts),
          date = as.character(date),
          rasts = rep(list.files(here("data/water/p042_masked_merged/"),
@@ -400,15 +405,13 @@ rasts_df = data.frame(rasts = rep(rasts, length(zips_list)),
                      length(zips_list))) %>% 
   filter(!date %in% c("2022-03-10","2022-06-06","2022-11-13",
                       "2023-03-13","2023-04-22","2023-05-08",
-                      "2023-05-16","2023-06-09","2023-07-03", "2023-09-21")) %>% 
+                      "2023-05-16","2023-06-09","2023-07-03", 
+                      "2023-09-21","2023-11-08","2023-11-16")) %>% 
   mutate(date_title = lubridate::ymd(date),
          date_title = format(date_title, "%m-%d-%Y"),
          date = gsub("-", "", date)) 
 
 
-
-# library(magick)
-  
 ### Loop to create .mp4 for each zip code
 for (j in 1:length(zips_list)) {
   ## Only look at rasters for one zip at a time
@@ -424,7 +427,7 @@ for (j in 1:length(zips_list)) {
         r <- rast(rasts_filter$rasts[i])
         values(r)[values(r) == 0] <- NA
   
-        zip <- read_sf(here("data/zipcodes/kern_zips.shp")) %>%
+        zip <- zips_sf %>%
           filter(zipcode == rasts_filter$zipcode[i]) %>%
           vect() %>%
           project(y=crs(r))
@@ -455,36 +458,68 @@ for (j in 1:length(zips_list)) {
             border-color: #222021;
             background: rgba(255,255,255,0.6);
             font-weight: bold;
-            font-size: 15px;
+            font-size: 25px;
           }"))
           title <- tags$div(
             tag.map.title, rasts_filter$date_title[i]
           )  
   
-        ## add raster to map
-        m <- leaflet(options = leafletOptions(zoomControl = FALSE)) %>%
-          addProviderTiles(providers$Esri.WorldImagery) %>%
-          ##zips outline bottom layer
-          addMapPane("zips", zIndex = 410) %>%
-          addMapPane("water", zIndex = 415) %>%
-          addRasterImage(r_crop, colors = "blue", 
-                         project = TRUE, options=pathOptions(pane="water")) %>%
-          addPolylines(stroke=TRUE, weight = 2, color="black",
-                     fill = TRUE, fillColor = "white", fillOpacity = 0.5,
-                     data = geom, options=pathOptions(pane="zips")) %>%
-          fitBounds(lng1 = bounds[1], lat1 = bounds[2],
-                    lng2 = bounds[3], lat2 = bounds[4]) %>%
-          addControl(title, position = "topright", className="map-title")
-  
+          ## Create leaflet map
+          m <-
+            leaflet(options = leafletOptions(zoomControl = FALSE)) %>%
+            ## world imagery base map
+            addProviderTiles(providers$Esri.WorldImagery) %>%
+            ## panes/layers on map; zip outline on bottom, water rast on top
+            addMapPane("zips", zIndex = 410) %>%
+            addMapPane("water", zIndex = 415) %>%
+            ## add water raster to map
+            addRasterImage(
+              r_crop,
+              colors = "blue",
+              project = TRUE,
+              options = pathOptions(pane = "water")
+            ) %>%
+            ## add zipcode to map
+            addPolylines(
+              stroke = TRUE,
+              weight = 2,
+              color = "black",
+              fill = TRUE,
+              fillColor = "white",
+              fillOpacity = 0.5,
+              data = geom,
+              options = pathOptions(pane = "zips")
+            ) %>%
+            ## boundaries of map limited to zipcode 
+            fitBounds(
+              lng1 = bounds[1],
+              lat1 = bounds[2],
+              lng2 = bounds[3],
+              lat2 = bounds[4]
+            ) %>%
+            ## add "title" with date to map
+            addControl(title, position = "topright", className = "map-title")
+          
         ## save map as .png
-        saveWidget(m, here("data/water/temp/temp.html"), selfcontained = TRUE)
-        webshot(here("data/water/temp/temp.html"),
-                file = paste0(here("data/water/zips//"),
-                              sprintf("zip_%02s_", rasts_filter$zipcode[i]),
-                              sprintf("%02s.png", rasts_filter$date[i])), 
-                cliprect = "viewport",
-                delay = 1,
-                zoom = 4)
+        htmlwidgets::saveWidget(m, 
+                                ## only need html temporarily
+                                ## once screenshot captured, can overwrite
+                                here("data/water/temp/temp.html"), 
+                                selfcontained = TRUE)
+        
+        webshot2::webshot(
+          url = here("data/water/temp/temp.html"),
+          ## save file name
+          file = paste0(
+            here("data/water/zips//"),
+            sprintf("zip_%02s_", rasts_filter$zipcode[i]),
+            sprintf("%02s.png", rasts_filter$date[i])
+          ),
+          cliprect = "viewport",
+          ## give time for map to "load" before capturing
+          delay = 1,
+          zoom = 4
+        )
       }##END inner loop
    
    ## List all pics of zip code
@@ -492,10 +527,20 @@ for (j in 1:length(zips_list)) {
                           pattern = zips_list[j],
                           full.names = TRUE)
    ## Output .mp4 from images
-   av::av_encode_video(png_files, framerate = 2, 
-                       output = paste0(here("data/water/vids//"),
-                                       "zip_", zips_list[j], "_2022_2023.mp4"))
-  # ## Output .gif from images
+   av::av_encode_video(
+     png_files,
+     framerate = 2,
+     output = paste0(
+       here("data/water/vids//"),
+       "zip_",
+       zips_list[j],
+       "_2022_2023.mp4"
+     )
+   )
+   
+   
+  #### Output .gif from images instead of .mp4 ----------
+  # library(magick)
   # gif_convert <- function(x, output) {
   # image_read(x) %>% 
   #   image_animate(fps=1) %>% 
@@ -518,9 +563,11 @@ for (j in 1:length(zips_list)) {
 
 The mean daily temperature by zip code was extracted from the PRISM dataset using a Google Earth Engine script. This was exported as a CSV with variables for date ("imageID"), zip code ("GEOID10"), and daily mean temperate ("mean"). We'll read in and clean up the CSV, as well as determine if each observation falls w/in the optimal range for WNV transmission. For *Culex tarsalis*, this is between 22.9-25.9C (optimum temp of 23.9 w/95% CI); for *Culex quinquefasciatus*, this is between 23.9-27.1C (optimum 25.2 w/95% CI). Becuse both species are present in Kern, we'll consider the optimal range from 22.9-27.1C (Shocket et al., 2020)
 ```{r}
+## Read in GEE output
 temp <- read_csv(here('data/temp/kern_tmean_GEE_output.csv'))
 
-temp2 <- temp %>% 
+## Tidy up and add info on temp ranges
+temp_tidy <- temp %>% 
   ## extract date from PRISM image id
   mutate(date = lubridate::ymd(imageID)) %>% 
   dplyr::select(!imageID) %>% 
@@ -530,70 +577,32 @@ temp2 <- temp %>%
   ## find temp in F
   mutate(tmean_f = (tmean_c*(9/5))+32,
          .before = date) %>% 
-  ## does a day fall w/in optimal temp range?
+  ## does a day fall w/in optimal range for culex?
   mutate(cx_opt = case_when(tmean_c >= 12.1 & tmean_c < 22.9 ~ "in range",
                             tmean_c >= 22.9 & tmean_c <= 27.1 ~ "optimal",
                             tmean_c > 27.1 & tmean_c <=31.9 ~ "in range",
-                            .default = "out range")) %>% 
-  ## set T/F as factor for consistent graphic
-  mutate(cx_opt = fct_relevel(cx_opt, levels = c("optimal", "in range", "out range")))
+                            .default = "out range"))
 
-write_csv(temp2, here('data/temp/kern_tmean_20100401_20230930.csv'))
+write_csv(temp_tidy, here('data/temp/kern_tmean_20100401_20230930.csv'))
 ```
 
-Some test plots
-```{r}
-temp3 <- temp2 %>% 
-  filter(zipcode == 93252,
-         date >= "2022-01-01" & date <= "2022-07-31")
-
-test <- temp3 %>% 
-  group_by(culex_range) %>% 
-  summarize(count = sum(culex_range == "TRUE", na.rm = T))
-
-ggplot(data = temp3, aes(x = date, y = tmean_f)) +
-    geom_rect(xmin = -Inf, xmax = Inf, ymax = 78.6, ymin = 73.2,
-            alpha = 0.01, fill = "gray75")+
-        geom_point(size = 3, 
-                   alpha = 0.7,
-                   aes(color = cxTar_opt)) +
-        scale_color_manual(name = "",
-                           values = c("coral2", "dodgerblue"),
-                           labels = c("", "In range"))+
-        geom_line(linewidth = 0.7) +
-        labs(y = "Mean daily temperature (F)",
-             x = "Date") +
-        scale_x_date(date_labels = "%b %y") +
-        geom_hline(yintercept = 73.2, linetype = "dashed", color = "gray50")+
-        geom_hline(yintercept = 78.6, linetype = "dashed", color = "gray50")+
-  annotate("text", y = 74, x = as.Date(temp3$date[1]), 
-           hjust = 0, vjust = 0,
-           label = "Optimal range for\nWNV transmission",
-           size = 3,
-           fontface = "bold") +
-        theme_classic() +
-        theme(
-          # axis.title.x = element_text(face = "bold", vjust = -1),
-          axis.title.y = element_text(vjust = 2, size = 14),
-          axis.title.x = element_text(vjust = -1, size = 14),
-          axis.text = element_text(size = 13),
-          legend.position = "none"
-        )
-```
 
 
 
 # Trap data
 
-Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plots showing how the number of WNV positives found in traps across a zip code change by month/year.
+Finally, we'll wrangle some trap data and aggregate it by zip code. Exact locations of traps should not be public, so instead we'll produce plots showing how abundance and MIR values across a zip code change by month/year.
 
 Because trap data is aggregated and assigned to clusters, we'll first need to assign each cluster to a zip code. 
 ```{r}
+## shp file of clusters
 clust <- read_sf(here("data/traps/andy/cluster_shp/clusterPolys.shp"))
 
+## shp file of zips
 zips <- read_sf(here("data/zipcodes/kern_zips.shp")) %>% 
   st_transform(crs = crs(clust))
 
+## Assign a cluster to a zip code
 clust_zips <- st_centroid(clust) %>% 
   st_join(zips) %>% 
   ## centroid of clust 7 and 95 *just* outside 93308
@@ -604,261 +613,63 @@ clust_zips <- st_centroid(clust) %>%
   within(., area_m2[clust == 95] <- zips$area_m2[zips$zipcode==93308])
 ```
 
-Now we can assign zipcodes to abundance and MIR data:
+Now we can assign zip codes to abundance and MIR data:
 ```{r}
 ## WNV MIR
-wnv <- read_csv(here("data/traps/andy/wnvMIRPIR1500LagWeeks0_NA.csv")) %>% 
-  janitor::clean_names() %>% 
+wnv <- read_csv(here("data/traps/andy/wnvMIRPIR1500LagWeeks0_NA.csv")) %>%
+  janitor::clean_names() %>%
   ## assign zip by clust
-  inner_join(x = .,y = clust_zips) %>% 
+  inner_join(x = ., y = clust_zips) %>%
   ## filter for relevant vars
-  dplyr::select(zipcode, clust:woy, date, 
-                pool_size, num_pools, mir_all, mir_spline_all) %>%
+  dplyr::select(zipcode,
+                clust:woy,
+                date,
+                pool_size,
+                num_pools,
+                mir_all,
+                mir_spline_all) %>%
   mutate(month = lubridate::month(date),
          .before = year)
+
 write_csv(wnv, here("data/traps/plotting/wnvMIR_plotting.csv"))
 
 ## SLEV MIR
-slev <- read_csv(here("data/traps/andy/slevMIRPIR1500LagWeeks0_NA.csv")) %>% 
-  janitor::clean_names() %>% 
-  inner_join(x=., y=clust_zips) %>% 
-  dplyr::select(zipcode, clust:woy, date,
-                pool_size, num_pools, mir_all, mir_spline_all) %>% 
+slev <- read_csv(here("data/traps/andy/slevMIRPIR1500LagWeeks0_NA.csv")) %>%
+  janitor::clean_names() %>%
+  inner_join(x = ., y = clust_zips) %>%
+  dplyr::select(zipcode,
+                clust:woy,
+                date,
+                pool_size,
+                num_pools,
+                mir_all,
+                mir_spline_all) %>%
   mutate(month = lubridate::month(date),
          .before = year)
+
 write_csv(slev, here("data/traps/plotting/slevMIR_plotting.csv"))
 
-### abundance
-abund <- read_csv(here('data/traps/andy/all1500LagWeeks0_NA.csv')) %>% 
-  janitor::clean_names() %>% 
+### Abundance
+abund <- read_csv(here('data/traps/andy/all1500LagWeeks0_NA.csv')) %>%
+  janitor::clean_names() %>%
   ## assign zip by clust
-  inner_join(x=., y=clust_zips) %>% 
+  inner_join(x = ., y = clust_zips) %>%
   ## filter for relevant vars
-  dplyr::select(zipcode, clust:woy, collection_date, mos_per_trap_night) %>% 
-  rename(date = collection_date) %>% 
+  dplyr::select(zipcode, 
+                clust:woy,
+                collection_date, 
+                mos_per_trap_night) %>%
+  rename(date = collection_date) %>%
   mutate(month = lubridate::month(date),
          .before = year)
 write_csv(abund, here("data/traps/plotting/abundance_plotting.csv"))
 ```
 
 
-```{r}
-wnv <- read_csv(here("data/traps/plotting/wnvMIR_plotting.csv"))
 
-startDate <- "2020-01-01"
-endDate <- "2020-12-31"
+# R0
 
-wnvDates <- wnv %>% 
-  filter(date >= startDate & date <= endDate) %>% 
-  filter(mir_all > 0) %>% 
-  filter(!is.na(zipcode))
-
-posZips <- unique(wnvDates$zipcode)
-
-zipInput <- "93311"
-
-ifelse(zipInput %in% posZips, "yes", "no")
-
-
-wnvZips <- zips_sf %>% 
-      dplyr::filter(zipcode %in% wnvDates$zipcode)
-```
-
-
-
-
-TEST WRANGLING/PLOTS:
-MIR:
-```{r}
-wnv <- read_csv(here("data/traps/wnvMIR_plotting.csv"))
-
-zip = 93203
-
-cases_zip_yr <- wnv %>% 
-  filter(zipcode == zip, 
-         date >= "2022-01-01" & date <= "2022-04-01") %>% 
-  group_by(year, date) %>% 
-  summarize(avgMIR = mean(mir_all, na.rm = TRUE))
-
-zip_avg_cases <- wnv %>% 
-  filter(zipcode == zip) %>% 
-  group_by(woy) %>% 
-  summarize(avg = mean(mir_all, na.rm = TRUE))
-
-kern_avg_cases <- wnv %>% 
-  group_by(woy) %>% 
-  summarize(avg = mean(mir_all, na.rm = TRUE))
-
-zip_avgMIR <- wnv %>%  
-  filter(zipcode==zip)
-zip_avgMIR <- mean(zip_avgMIR$mir_all, na.rm = TRUE)
-
-kern_avgMIR <- mean(wnv$mir_all, na.rm = TRUE)
-
-ggplot()+
-  ## time frame in zip code
-  geom_col(data = cases_zip_yr, 
-             aes(x=date, y = avgMIR),
-            fill = "sienna2", color = "sienna4") +
-  # ## avg zipcode
-  # geom_point(data = zip_avg_cases, 
-  #            aes(x=woy, y = avg),
-  #            color = "plum", size = 3, alpha = 0.6) +
-  # geom_line(data = zip_avg_cases, 
-  #            aes(x=woy, y = avg),
-  #           color = "plum4") +
-  # ## avg kern
-  # geom_point(data = kern_avg_cases, 
-  #            aes(x=woy, y = avg),
-  #            color = "gray50", size = 3, alpha = 0.6) +
-  # geom_line(data = kern_avg_cases, 
-  #            aes(x=woy, y = avg),
-  #           color = "black") +
-  labs(y = "Average MIR",
-       x = element_blank()) +
-  theme_classic() +
-  theme(
-    # axis.title.x = element_text(face = "bold", vjust = -1),
-    axis.title.y = element_text(face = 'bold', vjust = 3)
-  )
-
-```
-
-Abundance:
-```{r}
-abund <- read_csv(here("data/traps/abundance_plotting.csv"))
-
-zip = 93249
-
-if (length(abund_cust$avg) == 0) {
-  print("no data")
-}
-
-abund_cust <- abund %>% 
-  filter(zipcode == zip, 
-         date >= "2032-01-01" & date <= "2032-12-31") %>% 
-  group_by(year, date) %>% 
-  summarize(avg = mean(mos_per_trap_night, na.rm = TRUE))
-
-zip_avg_abund <- abund %>% 
-  filter(zipcode == zip) %>% 
-  group_by(woy) %>% 
-  summarize(avg = mean(mos_per_trap_night, na.rm = TRUE))
-
-kern_avg_abund <- abund %>% 
-  group_by(woy) %>% 
-  summarize(avg = mean(mos_per_trap_night, na.rm = TRUE))
-
-## avg values
-cust_avgAbund <- abund %>% 
-  filter(zipcode == zip,
-         date >= "2022-01-01" & date <= "2022-12-31")
-cust_avgAbund <- mean(cust_avgAbund$mos_per_trap_night, na.rm = TRUE)
-
-zip_avgAbund <- abund %>%  
-  filter(zipcode==zip)
-zip_avgAbund <- mean(zip_avgAbund$mos_per_trap_night, na.rm = TRUE)
-
-kern_time_avgAbund <- abund %>% 
-  filter(date >= "2022-01-01" & date <= "2022-12-31")
-kern_time_avgAbund <- mean(kern_time_avgAbund$mos_per_trap_night, na.rm = TRUE)
-
-
-## abundance comp (filled)
-ggplot()+
-  ## avg kern
-  geom_point(data = kern_avg_abund,
-             aes(x=woy, y = avg),
-             color = "gray30", size = 2.5, alpha = 0.6) +
-  geom_line(data = kern_avg_abund,
-             aes(x=woy, y = avg),
-            color = "black", linewidth = 0.6) +
-  geom_area(data = kern_avg_abund,
-            aes(x=woy, y = avg),
-            fill = "gray60", alpha=.4)+
-   # avg zipcode
-  geom_point(data = zip_avg_abund,
-             aes(x=woy, y = avg),
-             color = "plum", size = 2.5, alpha = 0.8) +
-  geom_line(data = zip_avg_abund,
-             aes(x=woy, y = avg),
-            color = "purple4", linewidth = 0.7) +
-   geom_area(data = zip_avg_abund,
-             aes(x=woy, y = avg),
-            fill = "plum", alpha=.5) +
-  ## user defined zip and time
-   geom_point(data = abund_cust, 
-             aes(x=woy, y = avg),
-             color = "sienna2", size = 2.5, alpha = 0.8) +
-  geom_line(data = abund_cust, 
-             aes(x=woy, y = avg),
-            color = "sienna4", linewidth = 0.7) +
-  geom_area(data = abund_cust, 
-             aes(x=woy, y = avg),
-            fill = "sienna2", alpha = .5) +
-  labs(y = "Average weekly abundance",
-       x = element_blank()) +
-  theme_classic() +
-  theme(
-    # axis.title.x = element_text(face = "bold", vjust = -1),
-    axis.title.y = element_text(face = 'bold', vjust = 3)
-  )
-
-
-## abundance comp (lines)
-ggplot()+
-  ## avg kern (in time period)
-  geom_hline(yintercept = kern_time_avgAbund,
-            color = "black", linetype = "dashed", linewidth = 0.8) +
-  # annotate("text", y = (kern_time_avgAbund+0.07), x = abund_cust$date[1],
-  #          hjust = 0,
-  #          label = "Average abundance within time period",
-  #          size = 3,
-  #          fontface = "bold") +
-   # avg zipcode
-  geom_hline(yintercept = zip_avgAbund,
-            color = "purple", linetype = "dashed", linewidth = 0.8) +
-  # annotate("text", y = (zip_avgAbund+0.07), x = abund_cust$date[1],
-  #          hjust = 0,
-  #          label = "Average abundance across zip code",
-  #          size = 3,
-  #          color = "purple4",
-  #          fontface = "bold") +
-  ## user defined zip/year
-   geom_point(data = abund_cust, 
-             aes(x=date, y = avg),
-             color = "sienna2", size = 3, alpha = 0.7) +
-  geom_line(data = abund_cust, 
-             aes(x=date, y = avg),
-            color = "sienna4", linewidth = 0.8) +
-  # geom_hline(yintercept = cust_avgAbund,
-  #            color = "sienna", linetype= "dashed", linewidth = 0.8)+
-  # annotate("text", y = (cust_avgAbund+0.07), x = abund_cust$date[1],
-  #          hjust = 0,
-  #          label = "Average abundance for zipcode and time period",
-  #          size = 3,
-  #          color = "sienna4",
-  #          fontface = "bold") +
-  # geom_area(data = abund_cust, 
-  #            aes(x=woy, y = avg),
-  #           fill = "sienna2", alpha = .5) +
-  labs(y = "Average weekly abundance",
-       x = element_blank()) +
-  scale_x_date(date_labels = "%b %y",
-               date_breaks = "1 month") +
-  theme_classic() +
-  theme(
-    # axis.title.x = element_text(face = "bold", vjust = -1),
-    axis.title.y = element_text(face = 'bold', vjust = 3),
-    legend.position = "right"
-  )
-```
-
-
-# Transmission efficiency
-
-Here we'll find an average WNV transmission efficiency for each zipcode.
-*NOTE:* This may be replaced by R0 once the model is done.
+Once the model is complete, this chunk may be useful for finding average R0 by zip code. As a proof of concept, this was done using a sample transmission efficiency raster in Kern.
 ```{r}
 ## Read in data
 wnv_trans <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
@@ -867,12 +678,12 @@ wnv_trans <- rast(here('data/Kern_transmission_raster_wgs84.tif'))
 kern_zips <- vect(here("data/zipcodes/kern_zips.shp")) %>% 
   project(y = crs(wnv_trans))
 
-## find total average
-trans_kern <- global(wnv_trans, "mean", na.rm = T)
+## find average across all of Kern
+trans_kern <- global(wnv_trans, fun = "mean", na.rm = TRUE)
 trans_kern <- data.frame("trans_eff" = trans_kern[1,1], "zipcode" = "Kern")
 
 ## find the mean value per zip
-trans_zonal <- terra::zonal(wnv_trans, kern_zips, fun = 'mean', na.rm = T)
+trans_zonal <- terra::zonal(wnv_trans, kern_zips, fun = 'mean', na.rm = TRUE)
 
 trans_zonal_zips <- trans_zonal %>% 
   mutate(zipcode = kern_zips$zipcode) %>% 

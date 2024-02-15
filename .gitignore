@@ -3,5 +3,6 @@
 .RData
 .Ruserdata
 data/water/p042_masked_merged
+data/water/Landsat_Dan
 data/water/zips
 data/traps

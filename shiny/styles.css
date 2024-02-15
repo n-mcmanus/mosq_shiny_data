@@ -2,9 +2,10 @@ input[type="number"] {
   max-width: 80%;
 }
 
+/* specify map location */
 div.outer {
   position: fixed;
-  top: 41px;
+  top: 63px;
   left: 0;
   right: 0;
   bottom: 0;
@@ -12,20 +13,20 @@ div.outer {
   padding: 0;
 }
 
-/* Customize fonts */
+/* Customize fonts 
   body, label, input, button, select { 
     font-family: 'Helvetica Neue', Helvetica;
     font-weight: 200;
   }
-h1, h2, h3, h4 { font-weight: 400; }
+h1, h2, h3, h4 { font-weight: 400; } */
 
 #controls {
 /* Appearance */
   background-color: white;
-padding: 0 20px 20px 20px;
+padding: 20px 20px 20px 20px;
 cursor: move;
 /* Fade out while not hovering */
-  opacity: 0.80;
+  opacity: 0.85;
 zoom: 0.9;
 transition: opacity 500ms 1s;
 }

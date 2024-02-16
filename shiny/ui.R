@@ -23,11 +23,11 @@ ui <- page_navbar(
     h2("Mosquito Abundance and Diseases"),
     ## Intro text
     p(
-      "This page explores how mosquito abundance and mosquito-borne diseases (MBD) change by time and location in Kern County. Data comes from monitoring and testing efforts of the ", 
+      "This page explores how mosquito abundance and mosquito-borne diseases (MBD) change over time across zip codes in Kern County. Data comes from mosquito and disease surveillance efforts of the ", 
       tags$a(href = "https://www.kernmosquito.com/", "Kern Mosquito and Vector Control District,"),
-      "who deploy mosquito traps throughout the county. These pools of trapped mosquitos are then counted and tested for a range of MBD. To standardize for monitoring effort, abundance and MBD cases are reported as mosquitos per trap night and minimum infection rate (MIR), respectively. Details on these metrics can be found by pressing the ",
+      "who deploy mosquito traps throughout the county. These pools of trapped mosquitos are then counted and tested for a range of MBD’s. To standardize for monitoring effort, abundance of mosquitos and rates of infection in mosquitos are reported as mosquitos per trap night and minimum infection rate (MIR), respectively. Details on these metrics can be found by pressing the ",
       bs_icon("question-circle", size = "1em"),
-      " on their respective figures. For more details on mosquito species and MBD, please visit the Information tab."
+      " on their respective figures. For more details on mosquito species and MBD in Kern County, please visit the Information tab."
       # Example for linking to another tab. Not sure if it's necessary here though
       # actionLink("link_to_info", "tab.")
     ),
@@ -70,7 +70,13 @@ ui <- page_navbar(
             width = 6,
             selectInput(
               inputId = "trapYear",
-              label = "Year:",
+              label = span(
+                "Year:",
+                tooltip(
+                  bs_icon("info-circle"),
+                  "To select multiple years, use the custom date range below",
+                  options = list(class = "background-color: #f00")
+                )),
               choices = list(
                 "2023" = "2023",
                 "2022" = "2022",
@@ -202,7 +208,7 @@ ui <- page_navbar(
   nav_panel("Surface water",
             value = "tab3",
             h2("Surface Water in Kern County"),
-            p("Here you can explore the changes in surface water between 2022-2023. Either select a zip code on the map to the right or enter one in the box below to see when and where surface water was present. Surface water can provide breeding habitat for mosquitoes; therefore, proximity to slow-moving or standing water may result in increased mosquito abundance and mosquito-borne disease risk. For more information, please visit the Information tab."),
+            p("Here you can explore the changes in surface water between 2022-2023. Either select a zip code on the map to the right or enter one in the box below to see when and where surface water was present. Surface water can provide breeding habitat for mosquitos; therefore, proximity to slow-moving or standing water may result in increased mosquito abundance and mosquito-borne disease risk. For more information, please visit the Information tab."),
             ## Water map and sidebar
             card(
               height = 450,
@@ -248,17 +254,17 @@ ui <- page_navbar(
               ## Mosquito panel
               accordion_panel(
                 title = "Mosquito Species:",
-                p("While over 50 species of mosquitoes can be found in California, not all present a threat to human health. Within Kern county, there are four species of concern responsible for disease transmission. Three of these species belong to the", em("Culex"), "genus and share similar life cycles and breeding conditions.", em("A. aegypti"), ", however, differ in breeding habitat, biting activity, and disease transmission. More information on these mosquito-borne diseases can be found in the following section."),
+                p("While over 50 species of mosquitos can be found in California, not all present a threat to human health. Within Kern county, there are four species of concern responsible for disease transmission. Three of these species belong to the", em("Culex"), "genus and share similar life cycles and breeding conditions.", em("Aedes aegypti"), ", however, differ in breeding habitat, biting activity, and disease transmission. More information on these mosquitos and the diseases they transmit can be found in the following section."),
                 layout_columns(
                   navset_card_underline(
                     ## Culex spp
                     nav_panel(
                       title = em("Culex spp."),
                       img(src = "c_tarsalis.jpg",
-                          width = "70%",
+                          width = "75%",
                           style = 'border: 1px solid #2d3e50;
                           margin-right: auto; margin-left: auto;'),
-                      p("The majority of mosquitoes in Kern County belong to the", em("Culex"), "genus. These mosquitoes are the primary vectors for West Nile, St. Louis encephalitis, and equine encephalitis viruses. ", em("Culex"), " mosquitoes breed in agricultural, natural, and human-made water sources, such as ornamental ponds, ditches, and puddles. Females lay their eggs on the surface of standing water, and within 10-14 days these eggs develop into adult mosquitoes that can fly away from the breeding site (Manimegalai & Sukanya, 2014). ", em("Culex"), " mosquitoes are most active at dawn, dusk, and after dark.")
+                      p("The majority of mosquitos in Kern County belong to the", em("Culex"), "genus. These mosquitos are the primary vectors for West Nile, St. Louis encephalitis, and westerm equine encephalitis viruses. ", em("Culex"), " mosquitos breed in agricultural, natural, and human-made water sources, such as ornamental ponds, ditches, and puddles. Females lay their eggs on the surface of standing water, and within 10-14 days these eggs develop into adult mosquitos that can fly away from the breeding site (Manimegalai & Sukanya, 2014). ", strong(em("Culex"), " mosquitos most actively bite at dawn, dusk, and after dark."))
                     ),
                     ## A. aegypti
                     nav_panel(
@@ -267,13 +273,14 @@ ui <- page_navbar(
                           width = "70%",
                           style = 'border: 1px solid #2d3e50;
                           margin-right: auto; margin-left: auto;'),
-                      p(em("Aedes aegypti"), ", commonly known as the yellow fever mosquito, can transmit zika, chikungunya, dengue, and yellow fever viruses (CDPH, 2023B; Pliego Pliego et al, 2017). Unlike", em("Culex"), "mosquitoes,", em("A. aegypti"), "are active during daytime as well as dawn and dusk. This species can breed in very small sources of standing water, such as bottle caps, allowing it to thrive in urban environments. Their life cycle closely follows that of ", em("Culex"), " mosquitoes; however, it takes only 7-10 days for an egg to develop into an adult mosquito (CDPH, 2023B).")
+                      p(em("Aedes aegypti,"), " commonly known as the yellow fever mosquito, can transmit zika, chikungunya, dengue, and yellow fever viruses (CDPH, 2023B; Pliego Pliego et al, 2017). In 2023, two southern California residents were infected with locally transmitted cases of dengue fever by this mosquito species, marking the first documented cases of dengue in California not associated with travel (Associated Press, 2023; LACDPH, 2023)."),
+                      p("Unlike", em("Culex"), "mosquitos, ", strong(em(" A. aegypti"), "actively bite during daytime as well as dawn and dusk."), "This species can breed in very small sources of standing water, such as bottle caps, allowing it to thrive in urban environments. Their life cycle closely follows that of ", em("Culex"), " mosquitos; however, it takes only 7-10 days for an egg to develop into an adult mosquito (CDPH, 2023B).")
                     ),
                   ),## End tabs
                   card(
                     card_header("Mosquito Life Cycle"),
                     img(src="lifecycle.png",
-                        width = "80%",
+                        width = "100%",
                         style="margin-top: auto; margin-bottom: auto; 
                         margin-left: auto; margin-right: auto;"
                         # style = 'border: 1px solid #2d3e50'
@@ -289,13 +296,13 @@ ui <- page_navbar(
                   ## WNV tab
                   nav_panel(
                     title = "WNV:",
-                    p("West Nile virus (WNV) is one of 15 known mosquito-borne diseases in California (CDPH, 2023A). In North America, WNV was first detected in New York in 1999; the virus rapidly spread across the continent, reaching southern California by 2003 and spreading to all 58 counties in the state within a year (Hartley et al., 2012; Lanciotti et al., 1999; Reisen et al., 2004). Currently, WNV is the most prevalent mosquito-borne disease in California, with over 7,500 cases 345 fatalties in California between 2003 and 2022 (CDPH, 2023A)."),
-                    p("WNV is mainly spread by mosquitoes in the ",em("Culex"), " genus (Boser et al., 2021). The majority of people (8 out of 10) infected with WNV remain asymptomatic; those who do develop symptoms may experience fever, head and body aches, vomiting, and fatigue. Roughly 1 in 150 people develop serious symptoms including encephalitis or meningitis, which can result in death (CDC, 2023). ")
+                    p("West Nile virus (WNV) is one of 15 known mosquito-borne diseases in California (CDPH, 2023A). In North America, WNV was first detected in New York in 1999; the virus rapidly spread across the continent, reaching southern California by 2003 and spreading to all 58 counties in the state within a year (Hartley et al., 2012; Lanciotti et al., 1999; Reisen et al., 2004). Currently, WNV is the most prevalent mosquito-borne disease in California, with over 7,500 cases and ~350 fatalties in California between 2003 and 2022 (CDPH, 2023A)."),
+                    p("WNV is mainly spread by mosquitos in the ",em("Culex"), " genus (Reisen, 2013). The majority of people (8 out of 10) infected with WNV remain asymptomatic; those who do develop symptoms may experience fever, head and body aches, vomiting, and fatigue. Roughly 1 in 150 people develop serious symptoms including encephalitis or meningitis, which can result in death (CDC, 2023). ")
                   ),
                   ## SLEV tab
                   nav_panel(
                     title = "SLEV:",
-                    p("St. Louis encephalitis virus (SLEV) is another mosquito-borne disease of concern in California, spread to humans through the bite of infected", em("Culex"), " mosquitoes. Human cases are typically uncommon, with fewer than 10 infection reported per year in California since 1990 (CDPH, 2023A). In 2022, however, there were 16 confirmed human cases of SLEV, marking the highest number of infections since 2015 (CDPH, 2023A)."), 
+                    p("St. Louis encephalitis virus (SLEV) is another mosquito-borne disease of concern in California, spread to humans through the bite of infected", em("Culex"), " mosquitos. Human cases are typically uncommon, with fewer than 10 infections reported per year in California since 1990 (CDPH, 2023A). In 2022, however, there were 16 confirmed human cases of SLEV, marking the highest number of infections since 2015 (CDPH, 2023A)."), 
                     p("Most people infected with SLEV remain asymptomatic; those who do develop symptoms may experience them between 4 to 14 days after initial infection (CDC, 2023). Symptoms may include sudden fever, headache, dizziness, and nausea lasting several days to two weeks. For some, including older adults or people with weakened immune systems, SLEV continues to develop into encephalitis or meningitis. Roughly 5-20% of those diagnosed with SLEV die as result of infection (CDC, 2023).")
                   )
                   
@@ -303,14 +310,14 @@ ui <- page_navbar(
                 p("More information on MBD and symptoms can be found online at the ", 
                   a(href = "https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/MosquitoesandMosquitoBorneDiseases.aspx", "California Dept. of Public Health"), 
                   "or the", 
-                  a(href = "https://www.cdc.gov/mosquitoes/about/diseases.html", "Center for Disease Control and Prevention."))
+                  a(href = "https://www.cdc.gov/mosquitoes/about/diseases.html", "Centers for Disease Control and Prevention."))
               ),##End panel
               
               ## Risk factors
               accordion_panel(
                 title = "Risk factors:",
-                p("Unsurprisingly, the risk of a MBD infection largely depends on the proximity to infected mosquito populations. The geographic and seasonal distribution of mosquitoes depends on many factors, including climate, weather, land cover, and pest control efforts. This application explores two main determinants of where and when mosquitoes may breed: surface water and daily air temperature. Standing surface water provides the habitat for breeding, while optimal air temperature provides the conditions for breeding and survival. Therefore, an increased amount of standing water on the landscape and increased number of days within an optimal air temperature range may increase local mosquito populations."),
-                p("Residents can take several steps to minimize exposure to mosquitoes. When outdoors, wearing long-sleeve shirts and pants, as well as insect repellent, reduces the risk of being bitten. This is especially true during times of heightened mosquito activity, such as dawn and dusk, or near locations where mosquitoes likely breed. Regularly emptying water-holding containers and installing secure screens on windows and doors also helps control mosquito numbers both outside and inside your home."),
+                p("The risk of a MBD infection largely depends on the proximity to infected mosquito populations. The geographic and seasonal distribution of mosquitos depends on many factors, including climate, weather, land cover, and pest control efforts. This application explores two main determinants of where and when mosquitos may breed, and how abundant biting adult mosquitos are: surface water and daily air temperature. Standing surface water provides the habitat for breeding, while air temperature determines breeding success and development time, as well as adult mosquito activity and survival. Therefore, an increased amount of standing water on the landscape and increased number of days within an optimal air temperature range may increase local mosquito populations."),
+                p("Residents can take several steps to minimize exposure to mosquitos. When outdoors, wearing long-sleeve shirts and pants, as well as insect repellent, reduces the risk of being bitten. This is especially true during times of heightened mosquito activity, such as dawn and dusk, or near locations where mosquitos likely breed. Regularly emptying water-holding containers and installing secure screens on windows and doors also helps control mosquito numbers both outside and inside your home."),
                 p("For more information on MBD risk factors and ways to minimize risk, you can visit the CDC's", a(href = "https://www.cdc.gov/mosquitoes/index.html", "website"), "or the", a(href = "https://www.kernmosquito.com/how-can-i-stop-prevent-nuisance-mosquitoes-and-control-the-spread-of-diseases", "Kern Mosquito and Vector Control District."))
               ), ##End panel
               
@@ -318,7 +325,10 @@ ui <- page_navbar(
               accordion_panel(
                 title = "Sources:",
                 tags$li(
-                  "Beyer, H. L., Dujardin, Y., Watts, M. E., & Possingham, H. P. (2016). Solving conservation planning problems with integer linear programming. Ecological Modelling, 328, 14–22. https://doi.org/10.1016/j.ecolmodel.2016.02.005"
+                  ""
+                ),
+                tags$li(
+                  "Associated Press. (2023, Nov 3). California officials confirm 2 cases of dengue, a mosquito-borne illness rarely transmitted in US. AP News. https://apnews.com/article/california-dengue-fever-cases-46a7a012e1e3566fef527b3b2be3ee0a"
                 ),
                 tags$li(
                   "California Department of Public Health, Mosquito & Vector control Association of California. (2023A). University of California. California Mosquito-Borne Virus Surveillance and Response Plan."
@@ -336,10 +346,16 @@ ui <- page_navbar(
                   "Lanciotti, R. S. et al. (1999). Origin of the West Nile Virus Responsible for an Outbreak of Encephalitis in the Northeastern United States. Science, 286(5448), 2333–2337. https://doi.org/10.1126/science.286.5448.2333"
                 ),
                 tags$li(
+                  "Los Angeles County Department of Public Health (2023). Dengue. http://publichealth.lacounty.gov/acd/VectorDengue.htm#:~:text=Current%20Situation%20in%20LA%20County,suspect%20cases%20have%20been%20identified."
+                ),
+                tags$li(
                   "Manimegalai, K., & Sukanya, S. (2014). Original Research Article Biology of the filarial vector, Culex quinquefasciatus (Diptera:Culicidae). 718–724."
                 ),
                 tags$li(
                   "Pliego Pliego, E., Velázquez-Castro, J., & Fraguela Collar, A. (2017). Seasonality on the life cycle of Aedes aegypti mosquito and its statistical relation with dengue outbreaks. Applied Mathematical Modelling, 50, 484–496. https://doi.org/10.1016/j.apm.2017.06.003"
+                ),
+                tags$li(
+                  "Reisen, W. K. (2013). Ecology of West Nile Virus in North America. Viruses, 5(9), 2079–2105. https://doi.org/10.3390/v5092079"
                 ),
                 tags$li(
                   "Reisen, W., Lothrop, H., Chiles, R., Madon, M., Cossen, C., Woods, L., Husted, S., Kramer, V., & Edman, J. (2004). West Nile Virus in California. Emerging Infectious Diseases, 10(8), 1369–1378. https://doi.org/10.3201/eid1008.040077"

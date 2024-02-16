@@ -16,7 +16,8 @@ library(sf)            ## Leaflet-friendly vector pkg
 water_r <- raster(here('data/water/summed_water_90m_2022_2023.tif'))
 
 ## Raster color palettes
-water_pal <- colorBin(palette = 'Blues', 
+water_pal <- colorBin(
+  palette = colorRamp(c('#d0ddef', '#104e9e')),
                       domain = values(water_r),
                       na.color = "transparent")
 
@@ -380,8 +381,8 @@ function(input, output, session) {
             "Mosquito abundance:",
             popover(
               trigger = bs_icon("question-circle"),
-              "Due to the large number of traps in Kern county and variability in collection frequency, mosquito abundance is standardized as “mosquitoes per trap night”, or:",
-              withMathJax("$$\\scriptsize{\\frac{\\text{Total number individuals}}{\\text{Number nights since last collection}}}$$"),
+              "Due to the large number of traps in Kern county and variability in collection frequency, mosquito abundance is standardized as “mosquitos per trap night”, or:",
+              withMathJax("$$\\scriptsize{\\frac{\\text{Total number of mosquitos}}{\\text{Number of nights the trap was deployed}}}$$"),
               "This value is then averaged across all traps in a given area (zip code or county) by week. As such, reported average abundance values do not represent the total number of mosquitoes present in a week, but rather a standardized metric that can be used to track relative changes in abundance over time."
             ),
             class = "d-flex justify-content-between"
@@ -406,7 +407,7 @@ function(input, output, session) {
             popover(
               trigger = bs_icon("question-circle"),
               placement = "right",
-              "Minimum infection rate (MIR) is a common method used to estimate infection rates in mosquito populations. Mosquitoes are trapped and tested in groups, or “pools”. MIR assumes that if a tested pool comes back positive for a MBD, only one mosquito in the pool is infected. Reported MIR values can be interpreted as:  “At minimum, X number of mosquitoes were infected during week Y.” ",
+              "Minimum infection rate (MIR) is a common metric used to estimate infection rates in mosquito populations. Mosquitos are trapped and tested in groups, or “pools”. MIR assumes that if a tested pool comes back positive for a MBD, only one mosquito in the pool is infected. Reported MIR values can be interpreted as:  “At minimum, X number of mosquitos were infected per 1,000 mosquitos tested during week Y.” ",
               withMathJax("$$\\scriptsize{MIR = \\frac{\\text{Number Positive Pools}} {\\text{Total Number Individuals}}*1000}$$"),
             ),
             class = "d-flex justify-content-between"
@@ -859,6 +860,8 @@ function(input, output, session) {
     } else {
     accordion(
       width = "100%",
+      ## all open as default
+      open = TRUE,
       accordion_panel(
         "Temperature:",
         ## reduce margin size
@@ -924,7 +927,7 @@ function(input, output, session) {
     if(!(zipcode_d() %in% zips_sf$zipcode)) {
       return(NULL)
     } else {
-      paste0("In this time period, ", "<b>",optDays_int(), " days ","</b>",  "(", optDays_per(), "%)",  " fell within the optimal temperature range (red) and ", rangeDays_int(), " days (", rangeDays_per(),"%) fell within the thermal limits (orange) for WNV transmission by ", "<i>","Culex","</i>", " mosquitoes.")
+      paste0("In this time period, ", "<b>",optDays_int(), " days ","</b>",  "(", optDays_per(), "%)",  " fell within the optimal temperature range (red) and ", rangeDays_int(), " days (", rangeDays_per(),"%) fell within the thermal limits (orange) for WNV transmission by ", "<i>","Culex","</i>", " mosquitos.")
     }
   })
   
@@ -1201,7 +1204,7 @@ function(input, output, session) {
       ## Add legend 
       addLegend(pal = water_pal, values = values(water_r),
                 position = "bottomleft",
-                opacity = 0.8,
+                opacity = 0.9,
                 title = "# weeks surface </br> water observed:") %>% 
       
       setView(-119.2, 35.38, zoom = 9)
@@ -1327,7 +1330,7 @@ function(input, output, session) {
   ## CAPTIONS ----------------------
   ## Video & plot caption
   output$waterCard_caption <- renderText({
-    paste0("Changes in acreage and location of surface water in zip code ", zipcodeWater_d(), " between 2022-2023. The video (left) displays where surface water was detected (blue) for each date with data. The plot (right) quantifies how surface water differed over time in zip code ", zipcodeWater_d(), ".")
+    paste0("Changes in acreage and location of surface water in zip code ", zipcodeWater_d(), " between 2022-2023. The video (left) displays where surface water was detected (blue) for each date with data. The plot (right) quantifies how the area of surface water changes over time in zip code ", zipcodeWater_d(), ".")
   })
   
   
